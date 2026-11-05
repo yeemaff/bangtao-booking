@@ -1,13 +1,31 @@
-# Push a tag like v1.3.8 → GitHub builds the Windows installer and the Mac (Apple silicon) zip
-# and publishes them, with latest.yml / latest-mac.yml, as a release. The installed apps update from it.
+# Bump "version" in package.json and push to main → GitHub builds the Windows installer and the
+# Mac (Apple silicon) zip and publishes them, with latest.yml / latest-mac.yml, as release vX.Y.Z.
+# The installed apps update from that release. A version that already has a release is skipped.
 name: Release
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths: ['package.json']
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      exists: ${{ steps.v.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: |
+          V=$(node -p "require('./package.json').version")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if gh release view "v$V" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "exists=yes" >> "$GITHUB_OUTPUT"; else echo "exists=no" >> "$GITHUB_OUTPUT"; fi
   windows:
+    needs: check
+    if: needs.check.outputs.exists == 'no'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +35,8 @@ jobs:
       - run: npx electron-builder --win nsis --x64 --publish always
         env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
   mac:
-    needs: windows
+    needs: [check, windows]
+    if: needs.check.outputs.exists == 'no'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
