@@ -1,0 +1,28 @@
+# Push a tag like v1.3.8 → GitHub builds the Windows installer and the Mac (Apple silicon) zip
+# and publishes them, with latest.yml / latest-mac.yml, as a release. The installed apps update from it.
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npx electron-builder --win nsis --x64 --publish always
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+  mac:
+    needs: windows
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npx electron-builder --mac zip --arm64 --publish always
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}', CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
