@@ -1,5 +1,5 @@
 'use strict';
-const VERSION = '1.3.7';
+const VERSION = '1.3.8';
 
 /* ================= utilities ================= */
 const $ = (s, el = document) => el.querySelector(s);
@@ -26,6 +26,7 @@ const lsGet = (k, f) => { try { const v = localStorage.getItem(k); return v == n
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
 const ICONS = {
+  wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   map: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
@@ -400,7 +401,7 @@ function showFirstAdmin() {
 /* ================= main shell ================= */
 const SUB_PAGES = { equip: 'dashboard' }; // pages opened from the dashboard, not listed in the menu
 const NAV = [
-  ['dashboard', 'แดชบอร์ด', 'dashboard'], ['daily', 'งานประจำวัน', 'clipboard'], ['chart', 'ผังการจอง', 'calendar'], ['plan', 'ห้องพัก', 'map'],
+  ['dashboard', 'แดชบอร์ด', 'dashboard'], ['daily', 'งานประจำวัน', 'clipboard'], ['chart', 'ผังการจอง', 'calendar'], ['plan', 'ห้องพัก', 'map'], ['repairs', 'แจ้งซ่อม', 'wrench'],
   ['guests', 'ฐานข้อมูลแขก', 'users'], ['docs', 'เอกสาร', 'file'], ['reports', 'รายงานการเงิน', 'chart', true], ['users', 'ผู้ใช้งาน', 'key', 'owner'], ['settings', 'ตั้งค่า', 'settings'],
 ];
 let unsub = null;
@@ -426,11 +427,15 @@ function onStoreEvent(what, info) {
     const b = M.bookings.get(info.id); if (b) { remoteQueue.push({ by: info.by, b, type: info.type }); clearTimeout(remoteTimer); remoteTimer = setTimeout(flushRemote, 900); }
     if (b) notifyChange(b, info.prev, info.by);
   }
+  if (what === 'doc' && info.col === 'repairs' && info.by && Store.me && info.by !== Store.me.id && (info.type === 'insert' || info.type === 'update')) {
+    const r = M.repairs.get(info.id), was = info.prev?.status;
+    if (r && (!info.prev || (r.status !== was && r.status === 'done'))) pushNotif('repair', null, info.by, `${rpWhere(r)} · ${r.title}${r.category ? ' (' + r.category + ')' : ''} · โดย ${nameOf(info.by)}`, !info.prev ? (r.urgent ? '🔧 แจ้งซ่อมด่วน' : '🔧 แจ้งซ่อมใหม่') : '✅ ซ่อมเสร็จแล้ว');
+  }
   scheduleRender();
 }
 /* ---- desktop notifications (Windows / Mac), switched on or off per computer in Settings ---- */
-const NOTIF_KINDS = { checkin: 'แขกเช็คอิน', checkout: 'แขกเช็คเอาท์', newb: 'มีการจองใหม่', cancel: 'มีการยกเลิกการจอง', taxi: 'เตือนรถรับส่ง / แท็กซี่', bday: 'วันเกิดแขก', excel: 'อัปเดตจาก Excel' };
-const notifCfg = () => { let c = null; try { c = JSON.parse(localStorage.getItem('bv.notif') || 'null'); } catch {} return { on: true, checkin: true, checkout: true, newb: true, cancel: true, taxi: true, bday: true, excel: true, always: false, lead: 60, ...(c || {}) }; };
+const NOTIF_KINDS = { repair: 'แจ้งซ่อม', checkin: 'แขกเช็คอิน', checkout: 'แขกเช็คเอาท์', newb: 'มีการจองใหม่', cancel: 'มีการยกเลิกการจอง', taxi: 'เตือนรถรับส่ง / แท็กซี่', bday: 'วันเกิดแขก', excel: 'อัปเดตจาก Excel' };
+const notifCfg = () => { let c = null; try { c = JSON.parse(localStorage.getItem('bv.notif') || 'null'); } catch {} return { on: true, repair: true, checkin: true, checkout: true, newb: true, cancel: true, taxi: true, bday: true, excel: true, always: false, lead: 60, ...(c || {}) }; };
 const setNotifCfg = c => { try { localStorage.setItem('bv.notif', JSON.stringify(c)); } catch {} };
 let notifQ = [], notifT = null;
 function notifyChange(b, prev, by) {
@@ -519,7 +524,7 @@ function shellHtml() {
       <div class="logo"><img class="mark mark-img" src="icon.png" alt=""><div><b>Bangtao Village</b><span>Booking System</span></div></div>
       <nav class="nav" id="nav">
         <div class="nav-label">เมนู</div>
-        ${NAV.map(([k, label, ic, admin]) => `<button data-page="${k}"${admin === 'owner' ? ' data-owner="1"' : admin ? ' data-admin="1"' : ''} title="${label}">${icon(ic)}<span>${label}</span>${k === 'daily' ? '<em class="badge" id="navDaily" hidden></em>' : ''}</button>`).join('')}
+        ${NAV.map(([k, label, ic, admin]) => `<button data-page="${k}"${admin === 'owner' ? ' data-owner="1"' : admin ? ' data-admin="1"' : ''} title="${label}">${icon(ic)}<span>${label}</span>${k === 'daily' ? '<em class="badge" id="navDaily" hidden></em>' : k === 'repairs' ? '<em class="badge" id="navRepairs" hidden></em>' : ''}</button>`).join('')}
       </nav>
     </aside>
     <div class="main">
@@ -577,7 +582,7 @@ function render() {
   $$('[data-owner]').forEach(b => b.hidden = !isOwner());
   $$('.quick [data-staff]').forEach(b => b.hidden = isAdmin());
   renderSync(); renderSideCard(); renderBirthdayBadge();
-  const r = { dashboard: renderDashboard, plan: renderPlan, chart: renderChart, daily: renderDaily, equip: renderEquip, guests: S.gView === 'channel' ? renderChannels : renderGuests, docs: renderDocs, reports: renderReports, users: renderUsers, settings: renderSettings }[S.page];
+  const r = { dashboard: renderDashboard, plan: renderPlan, chart: renderChart, daily: renderDaily, repairs: renderRepairs, equip: renderEquip, guests: S.gView === 'channel' ? renderChannels : renderGuests, docs: renderDocs, reports: renderReports, users: renderUsers, settings: renderSettings }[S.page];
   try { r && r(); } catch (e) { console.error(e); }
   labelDates($('#p-' + S.page));
 }
@@ -587,6 +592,7 @@ function renderSideCard() {
   $('#sideCard').innerHTML = `<small>คืนนี้มีแขก</small><b>${m.occ} / ${m.sellable} ห้อง</b><div class="meter"><i style="width:${Math.round(m.pct)}%"></i></div><small>${Math.round(m.pct)}% · ${m.pax} ท่าน · ว่าง ${m.sellable - m.occ} ห้อง</small><button id="sideFind">${icon('door')} หาห้องว่าง</button>`;
   $('#sideFind').onclick = () => openFinder();
   const nd = $('#navDaily'); if (nd) { const n = m.arr - m.arrDone; nd.hidden = !n; nd.textContent = n; }
+  renderRepairCard();
 }
 function openUserMenu(anchor) {
   document.querySelector('.menu')?.remove();
@@ -698,7 +704,7 @@ function pagesHtml() {
   <section class="page" id="p-daily" hidden>
     <div class="page-head"><div><h1 id="dlTitle">งานประจำวัน</h1><div class="sub">เช็คอิน เช็คเอาท์ อาหารเช้า ทำความสะอาด และผ้าซัก ทุกเครื่องเห็นพร้อมกัน</div></div><div class="spacer"></div><button class="btn" id="inHouseBtn">${icon('print')} In House Report</button>${datebar('dl')}</div>
     <div class="statgrid" id="dlStats"></div>
-    <div class="card todo-card"><div class="card-head"><h3>${icon('check')} To Do List</h3><span class="hint" id="todoCount"></span><div class="spacer"></div><button class="btn sm primary" id="todoAdd">${icon('plus')} ฝากงาน</button></div><div id="todoList" class="todo-list"></div></div>
+    <div class="mini-strip" id="dlMini"><button class="mini-btn" id="todoAdd" title="ฝากงาน (To Do List)">${icon('check')}<em class="badge" id="todoCount" hidden></em></button><div id="todoList" class="mini-list"></div><button class="mini-btn" id="dlRpNew" title="แจ้งซ่อม">${icon('wrench')}<em class="badge" id="dlRpCount" hidden></em></button><div id="dlRepairs" class="mini-list"></div></div>
     <div class="grid2">
       <div class="card"><div class="card-head"><h3>เช็คอินวันนี้</h3><span class="hint" id="arrCount"></span></div><div class="tw" id="arrivals"></div></div>
       <div class="card"><div class="card-head"><h3>เช็คเอาท์วันนี้</h3><span class="hint" id="depCount"></span></div><div class="tw" id="departures"></div></div>
@@ -719,6 +725,13 @@ function pagesHtml() {
       <select id="gSort" class="inline"><option value="last">มาล่าสุด</option><option value="stays">มาบ่อยที่สุด</option><option value="spent" data-fin="1">ใช้จ่ายมากที่สุด</option><option value="name">ชื่อ A–Z</option></select></div>
     <div class="card"><div class="tw" id="gResults"></div></div>
     </div>
+  </section>
+
+  <section class="page" id="p-repairs" hidden>
+    <div class="page-head"><div><h1>แจ้งซ่อม</h1><div class="sub">ของเสีย ห้องมีปัญหา และงานซ่อมทั้งหมด · ทุกเครื่องเห็นพร้อมกัน</div></div><div class="spacer"></div><button class="btn primary" id="rpNew">${icon('wrench')} แจ้งซ่อม</button></div>
+    <div class="row"><input type="search" id="rpQ" placeholder="ค้นหา ห้อง อะไรเสีย หรือเลขงาน" style="flex:1 1 280px;width:auto"></div>
+    <div class="plan-filters" id="rpChips"></div>
+    <div class="card"><div class="rp-list" id="rpList"></div></div>
   </section>
 
   <section class="page" id="p-docs" hidden>
@@ -840,7 +853,7 @@ function bindPages() {
   // daily
   bindDaily(); bindEquip();
   // guests
-  bindChannels(); bindDocs(); bindTodos();
+  bindChannels(); bindDocs(); bindTodos(); bindRepairs();
   $('#gViews').addEventListener('click', e => { const b = e.target.closest('[data-gview]'); if (!b) return; S.gView = b.dataset.gview; lsSet('bv.gView', S.gView);
     $$('#gViews [data-gview]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.gview === S.gView))); $('#gChannels').hidden = S.gView !== 'channel'; $('#gListView').hidden = S.gView === 'channel'; render(); });
   S.gView = lsGet('bv.gView', 'list'); $$('#gViews [data-gview]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.gview === S.gView))); $('#gChannels').hidden = S.gView !== 'channel'; $('#gListView').hidden = S.gView === 'channel';
@@ -1909,7 +1922,8 @@ function bindDaily() {
     const b = e.target.closest('button[data-op]'); if (!b) return;
     const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on)); setOp(b.closest('[data-room]').dataset.room, b.dataset.op, on); });
   $('#txList').addEventListener('change', e => { const s = e.target.closest('.tx-st'); if (s) setTxStatus(s.dataset.bid, s.dataset.tid, s.value); });
-  $('#txList').addEventListener('click', e => { if (e.target.closest('select')) return; const it = e.target.closest('.tx-item, .tx-soon-row'); if (it) { const b = M.bookings.get(it.dataset.id); if (b) openBooking(b); } });
+  $('#txList').addEventListener('click', async e => { if (e.target.closest('select')) return;
+    const xb = e.target.closest('[data-xsnow]'); if (xb) { xb.disabled = true; xb.textContent = 'กำลังดึง…'; try { toast(xsMsg(await xsRun('manual'))); } catch (er) { toast(errMsg(er), 'err'); } render(); return; } const it = e.target.closest('.tx-item, .tx-soon-row'); if (it) { const b = M.bookings.get(it.dataset.id); if (b) openBooking(b); } });
   $('#copyTx').onclick = () => { const d = S.day, list = transfersOn(d); if (!list.length) return toast('ไม่มีรถรับส่งวันนี้');
     copyText(msgDoc(`รถรับส่ง · ${fmtLong(d)}`, `รวม ${list.length} เที่ยว`, list.map(({ b, t }, i) => msgItem(`${i + 1}) ${t.time || 'ยังไม่ระบุเวลา'} · ${TX_TYPES[t.type] || 'รถรับส่ง'}`, [
       `ห้อง ${roomNo(b.roomId)} · ${b.guest}${t.pax ? ` (${t.pax} คน)` : ''}`, `เส้นทาง: ${txLine(t)}`, t.flight && `เที่ยวบิน: ${t.flight}`,
@@ -2604,6 +2618,13 @@ async function setTxStatus(bid, tid, status) {
   const list = txOf(b).map(t => t.id === tid ? { ...t, status } : t);
   if (await save(() => Store.merge('bookings', bid, { transfers: list }), `อัปเดตรถ: ${TX_STATUS[status]}`)) logAct(`รถรับส่ง ${b.guest}: ${TX_STATUS[status]}`);
 }
+// where the ride list stands against the Excel sheet, so a sync that never ran or failed is visible
+function xsTxStatus() {
+  const st = M.state.get('xlsync') || {}, desk = !!(window.bvDesktop && window.bvDesktop.fetchSheet), err = st.error && (st.errorAt || 0) > (st.at || 0);
+  const um = (st.tx && st.tx.unmatched || []).length;
+  const line = !st.at && !err ? 'ยังไม่เคยดึงตารางรถจาก Excel' : err ? `ดึงจาก Excel ไม่สำเร็จ ${fmtTime(st.errorAt)} · ${esc(st.error)}` : `ดึงจาก Excel ล่าสุด ${fmtTime(st.at)}${um ? ` · หาการจองไม่เจอ ${um} รายการ (ดูที่ตั้งค่า)` : ''}`;
+  return `<div class="tx-sync${err ? ' owe' : ''}"><span>${line}</span>${desk ? '<button class="btn sm ghost" data-xsnow>ดึงตอนนี้</button>' : ''}</div>`;
+}
 function renderTaxiCard(d) {
   const list = transfersOn(d), el = $('#txList'); if (!el) return;
   const next = []; for (let i = 1; i <= 7; i++) { const dd = addDays(d, i); for (const x of transfersOn(dd)) next.push({ ...x, d: dd }); }
@@ -2614,7 +2635,7 @@ function renderTaxiCard(d) {
       <div class="tx-main"><b>ห้อง ${esc(roomNo(b.roomId))} · ${esc(b.guest)}</b><span>${esc(txLine(t))}${t.flight ? ' · ✈ ' + esc(t.flight) : ''}${t.pax ? ' · ' + t.pax + ' คน' : ''}</span>${t.driver || t.plate || t.phone ? `<span class="tx-drv">${icon('car')} ${esc([t.driver, t.plate].filter(Boolean).join(' · ') || 'คนขับ')}${t.phone ? ` · <a href="tel:${esc(t.phone)}">${esc(t.phone)}</a>` : ''}</span>` : ''}${t.note ? `<span>${esc(t.note)}</span>` : ''}</div>
       <select class="tx-st" data-bid="${esc(b.id)}" data-tid="${esc(t.id)}">${Object.entries(TX_STATUS).map(([k, l]) => `<option value="${k}"${k === (t.status || 'need') ? ' selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')
     : '<div class="empty">ไม่มีรถรับส่งวันนี้</div>';
-  el.innerHTML += soon;
+  el.innerHTML += soon + xsTxStatus();
 }
 
 /* ================= RESERVATION SHEET (print for the guest) ================= */
@@ -2791,23 +2812,18 @@ function renderTodos(d) {
   const el = $('#todoList'); if (!el) return;
   $('#todoAdd').hidden = !Store.me;
   const { open, done } = todosFor(d), me = Store.me?.id;
-  $('#todoCount').textContent = open.length ? `ค้าง ${open.length} งาน${open.filter(t => t.due && t.due < d).length ? ` · เลยกำหนด ${open.filter(t => t.due && t.due < d).length}` : ''}` : '';
-  const item = (t, isDone) => { const late = !isDone && t.due && t.due < d, today = t.due === d, dn = todoDone(t.id);
-    return `<div class="todo${isDone ? ' done' : ''}${late ? ' late' : ''}${t.prio === 'high' ? ' high' : ''}" data-tid="${esc(t.id)}">
-      <button class="todo-ck" data-tdone aria-pressed="${isDone}" title="${isDone ? 'ยกเลิกว่าเสร็จ' : 'ทำเสร็จแล้ว'}">${icon('check')}</button>
-      <div class="todo-m"><b>${t.prio === 'high' ? '<span class="pill p-bad">ด่วน</span> ' : ''}${esc(t.title)}</b>${t.detail ? `<span>${esc(t.detail)}</span>` : ''}
-        <small>${t.due ? (late ? `<em>เลยกำหนด ${esc(fmtShort(t.due))}</em>` : today ? '<em class="td">วันนี้</em>' : 'ภายใน ' + esc(fmtShort(t.due))) : 'ไม่กำหนดวัน'} · ${t.assignee ? 'ฝากถึง ' + esc(nameOf(t.assignee)) : 'ทุกคน'} · โดย ${esc(nameOf(t.createdBy))}${isDone && dn ? ` · เสร็จโดย ${esc(nameOf(dn.by))} ${fmtTime(dn.at)}` : ''}</small></div>
-      <button class="btn sm ghost" data-tedit>แก้ไข</button></div>`; };
-  el.innerHTML = (open.length ? open.map(t => item(t, false)).join('') : '<div class="empty">ทำครบทุกงานแล้ว ✓</div>') + (done.length ? `<div class="hint" style="margin:10px 0 4px">เสร็จแล้ววันนี้</div>${done.map(t => item(t, true)).join('')}` : '');
+  { const c = $('#todoCount'), late = open.filter(t => t.due && t.due < d).length; c.hidden = !open.length; c.textContent = open.length; c.classList.toggle('red', !!late); }
+  // compact chips: tick to finish, click the text to open it
+  el.innerHTML = open.map(t => { const late = t.due && t.due < d;
+    return `<div class="mchip${late ? ' late' : ''}${t.prio === 'high' ? ' high' : ''}" data-tid="${esc(t.id)}" title="${esc([t.detail, t.due ? 'ภายใน ' + fmtShort(t.due) : '', 'โดย ' + nameOf(t.createdBy)].filter(Boolean).join(' · '))}"><button class="mchip-ck" data-tdone aria-pressed="false" title="ทำเสร็จแล้ว">${icon('check')}</button><span data-tedit>${t.prio === 'high' ? '<b class="red">ด่วน</b> ' : ''}${esc(t.title)}${late ? ` <small class="red">เลยกำหนด</small>` : ''}</span></div>`; }).join('');
 }
 function openTodo(t) {
-  const staff = [...Store.staff.values()].filter(s => s.active);
   const m = openModal(`<div class="sheet narrow"><div class="sheet-h"><h2>${t ? 'แก้ไขงาน' : 'ฝากงานใหม่'}</h2><div class="spacer"></div><button class="btn ghost" data-close>✕</button></div>
     <div class="sheet-b">
-      <label class="f"><span>งาน *</span><input type="text" id="tdTitle" value="${esc(t?.title || '')}" placeholder="เช่น เตรียมเค้กวันเกิดห้อง 21"></label>
+      <label class="f"><span>งาน *</span><input type="text" id="tdTitle" value="${esc(t?.title || '')}"></label>
       <label class="f"><span>รายละเอียด</span><textarea id="tdDetail" rows="3">${esc(t?.detail || '')}</textarea></label>
       <div class="fields"><label class="f"><span>ทำภายในวันที่</span><input type="date" id="tdDue" value="${esc(t?.due || S.day)}"></label>
-      <label class="f"><span>ฝากถึง</span><select id="tdWho"><option value="">ทุกคน</option>${staff.map(s => `<option value="${esc(s.id)}"${s.id === t?.assignee ? ' selected' : ''}>${esc(s.display_name || s.username)}</option>`).join('')}</select></label></div>
+      </div>
       <label class="chk"><input type="checkbox" id="tdHigh"${t?.prio === 'high' ? ' checked' : ''}> งานด่วน</label>
     </div>
     <div class="sheet-f">${t ? '<button class="btn danger" id="tdDel">ลบงาน</button>' : ''}<div class="spacer"></div><button class="btn" data-close>ยกเลิก</button><button class="btn primary" id="tdSave">บันทึก</button></div></div>`);
@@ -2815,7 +2831,7 @@ function openTodo(t) {
   v('tdSave').onclick = async () => {
     const title = v('tdTitle').value.trim(); if (!title) return toast('ใส่ชื่องานก่อน', 'err');
     const id = t?.id || Store.newId();
-    const data = { ...(t || { createdAt: Date.now(), createdBy: Store.me?.id }), title, detail: v('tdDetail').value.trim(), due: v('tdDue').value, assignee: v('tdWho').value, prio: v('tdHigh').checked ? 'high' : 'normal', updatedAt: Date.now() };
+    const data = { ...(t || { createdAt: Date.now(), createdBy: Store.me?.id }), title, detail: v('tdDetail').value.trim(), due: v('tdDue').value, prio: v('tdHigh').checked ? 'high' : 'normal', updatedAt: Date.now() };
     if (await save(() => Store.put('todos', id, data), t ? 'แก้ไขงานแล้ว' : 'ฝากงานแล้ว')) { logAct(`${t ? 'แก้ไข' : 'ฝาก'}งาน: ${title}`); m.close(); }
   };
   if (t) v('tdDel').onclick = async () => { if (await save(async () => { await Store.del('todos', t.id); if (M.tododone.has(t.id)) await Store.del('tododone', t.id); }, 'ลบงานแล้ว')) { logAct(`ลบงาน: ${t.title}`); m.close(); } };
@@ -3390,11 +3406,12 @@ async function xsRun(src = 'manual', file = null) {
   } catch (e) { await Store.merge('state', 'xlsync', { running: null, error: String(e.message || e), errorAt: Date.now() }).catch(() => {}); throw e; }
 }
 const xsMsg = r => `ดึงจาก Excel แล้ว · เพิ่ม ${r.added} · แก้ ${r.updated} · ย้าย ${r.moved} · ยกเลิก ${r.cancelled}${r.tx && (r.tx.added + r.tx.changed) ? ` · รถรับส่ง ${r.tx.added + r.tx.changed}` : ''}${r.nDiffs ? ` · ไม่ตรงกับ Excel ${r.nDiffs}` : ''}`;
+let xsStarted = false;
 function xsAutoStart() {
-  if (!window.bvDesktop || !window.bvDesktop.fetchSheet) return;
+  if (xsStarted || !window.bvDesktop || !window.bvDesktop.fetchSheet) return; xsStarted = true;
   const tick = () => { const s = settings(), st = M.state.get('xlsync') || {}; if (!s.xlsxAuto || !xsDriveId(s.xlsxUrl) || !Store.online) return;
     if (Date.now() - (st.at || 0) < XS_EVERY) return;
-    xsRun('auto').then(r => { if (r && (r.added || r.updated || r.moved || r.cancelled || (r.tx && r.tx.added + r.tx.changed))) { toast(xsMsg(r)); pushNotif('excel', null, null, xsMsg(r).replace('ดึงจาก Excel แล้ว · ', '')); } }).catch(e => console.warn('excel sync', e)); };
+    xsRun('auto').then(r => { if (r && (r.added || r.updated || r.moved || r.cancelled || (r.tx && r.tx.added + r.tx.changed))) { toast(xsMsg(r)); pushNotif('excel', null, null, xsMsg(r).replace('ดึงจาก Excel แล้ว · ', '')); } }).catch(e => { console.warn('excel sync', e); if (isAdmin()) toast('ดึงข้อมูลจาก Excel ไม่สำเร็จ: ' + errMsg(e), 'err'); }); };
   setTimeout(tick, 20000); setInterval(tick, 10 * 60e3);
 }
 function renderXsCard() {
@@ -3434,4 +3451,92 @@ function bindXsCard() {
       if (clash.length) return toast(`ห้อง ${roomNo(sh.roomId)} ไม่ว่าง · ซ้อนกับ ${clash.map(xsClashName).join(', ')}`, 'err');
       if (await save(() => Store.merge('bookings', b.id, { roomId: sh.roomId, checkIn: sh.checkIn, checkOut: sh.checkOut, ...(b.kind === 'block' ? { reason: sh.name } : { guest: sh.name }), xbase: { roomId: sh.roomId, checkIn: sh.checkIn, checkOut: sh.checkOut, name: sh.name }, xsyncAt: Date.now() }), 'ใช้ข้อมูลตาม Excel แล้ว')) await drop(c.xid); }
   });
+}
+
+/* ================= REPAIRS (แจ้งซ่อม) ================= */
+// Stored in the shared docs table as col = 'repairs' (Supabase view public.repairs shows them as a table).
+// Each change is kept in `history`, so a LINE bot can later be told about new reports and status changes.
+const RP_CATS = ['แอร์', 'ไฟฟ้า / หลอดไฟ', 'ประปา / น้ำ', 'ห้องน้ำ / สุขภัณฑ์', 'เฟอร์นิเจอร์ / ประตู', 'ทีวี / Wi-Fi', 'เครื่องใช้ไฟฟ้า', 'สระว่ายน้ำ / สวน', 'อื่นๆ'];
+const RP_STATUS = { open: 'รอซ่อม', doing: 'กำลังซ่อม', done: 'ซ่อมเสร็จ', cancelled: 'ยกเลิก' };
+const RP_PILL = { open: 'p-bad', doing: 'p-tentative', done: 'p-confirmed', cancelled: 'p-checked_out' };
+const RP_PLACES = ['ล็อบบี้ / Reception', 'ห้องอาหาร', 'ครัว', 'สระว่ายน้ำ', 'สวน / ทางเดิน', 'ที่จอดรถ', 'ห้องซักรีด', 'ห้องพนักงาน'];
+const rpList = () => [...(M.repairs || new Map()).values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+const rpOpen = () => rpList().filter(r => r.status === 'open' || r.status === 'doing');
+const rpWhere = r => r.roomId ? `ห้อง ${roomNo(r.roomId)}` : (r.place || '—');
+const rpNo = r => 'R' + String(r.no || 0).padStart(4, '0');
+function rpNextNo() { return rpList().reduce((m, r) => Math.max(m, +r.no || 0), 0) + 1; }
+function renderRepairs() {
+  const el = $('#rpList'); if (!el) return;
+  const f = S.rpFilter || 'active', q = ($('#rpQ').value || '').trim().toLowerCase(), all = rpList();
+  const count = k => k === 'active' ? all.filter(r => r.status === 'open' || r.status === 'doing').length : k === 'all' ? all.length : all.filter(r => r.status === k).length;
+  $('#rpChips').innerHTML = [['active', 'ยังไม่เสร็จ'], ['open', 'รอซ่อม'], ['doing', 'กำลังซ่อม'], ['done', 'ซ่อมเสร็จ'], ['all', 'ทั้งหมด']].map(([k, l]) => `<button class="chip" data-rpf="${k}" aria-pressed="${f === k}">${l} <b>${count(k)}</b></button>`).join('');
+  const list = all.filter(r => (f === 'all' || (f === 'active' ? r.status === 'open' || r.status === 'doing' : r.status === f)) && (!q || [r.title, r.detail, r.category, rpWhere(r), r.tech, rpNo(r)].some(x => String(x || '').toLowerCase().includes(q))));
+  el.innerHTML = list.length ? list.map(r => `<div class="rp-item st-${esc(r.status)}${r.urgent ? ' urgent' : ''}" data-rid="${esc(r.id)}">
+      <div class="rp-where"><b>${esc(rpWhere(r))}</b><span class="mono">${rpNo(r)}</span></div>
+      <div class="rp-main"><b>${r.urgent ? '<span class="pill p-bad">ด่วน</span> ' : ''}${esc(r.title)}</b>
+        <span>${esc(r.category || '')}${r.detail ? ' · ' + esc(r.detail) : ''}</span>
+        <small>แจ้งโดย ${esc(nameOf(r.reportedBy))} ${fmtTime(r.createdAt)}${r.tech ? ' · ช่าง ' + esc(r.tech) : ''}${r.status === 'done' && r.doneAt ? ' · เสร็จ ' + fmtTime(r.doneAt) : ''}${(r.photos || []).length ? ` · 📷 ${r.photos.length}` : ''}</small></div>
+      <span class="pill ${RP_PILL[r.status] || ''}">${RP_STATUS[r.status] || r.status}</span></div>`).join('')
+    : `<div class="empty">${f === 'active' ? 'ไม่มีงานซ่อมค้าง ✓' : 'ไม่มีรายการ'}</div>`;
+}
+function renderRepairCard() { // compact chips on the daily page
+  const el = $('#dlRepairs'); if (!el) return; const open = rpOpen();
+  { const c = $('#dlRpCount'); c.hidden = !open.length; c.textContent = open.length; c.classList.toggle('red', open.some(r => r.urgent)); }
+  el.innerHTML = open.slice(0, 8).map(r => `<div class="mchip rp st-${esc(r.status)}${r.urgent ? ' high' : ''}" data-rid="${esc(r.id)}" title="${esc(RP_STATUS[r.status] + (r.category ? ' · ' + r.category : '') + (r.detail ? ' · ' + r.detail : ''))}"><i class="dot"></i><span>${r.urgent ? '<b class="red">ด่วน</b> ' : ''}${esc(rpWhere(r))} · ${esc(r.title)}</span></div>`).join('') + (open.length > 8 ? `<button class="mchip more" data-gorp>+${open.length - 8}</button>` : '');
+  const nb = $('#navRepairs'); if (nb) { nb.hidden = !open.length; nb.textContent = open.length; }
+}
+function openRepair(r, preset = {}) {
+  const isNew = !r, d = r || { status: 'open', roomId: preset.roomId || '', place: '', category: '', urgent: false, photos: [] };
+  const rooms = roomsList();
+  let photos = (d.photos || []).slice();
+  const m = openModal(`<div class="sheet narrow"><div class="sheet-h"><h2>${isNew ? 'แจ้งซ่อม' : 'งานซ่อม ' + rpNo(d)}</h2><div class="spacer"></div><button class="btn ghost" data-close>✕</button></div>
+    <div class="sheet-b">
+      <div class="fields"><label class="f"><span>ห้อง</span><select id="rpRoom"><option value="">— ไม่ใช่ห้องพัก —</option>${rooms.map(x => `<option value="${esc(x.id)}"${x.id === d.roomId ? ' selected' : ''}>ห้อง ${esc(x.no)}</option>`).join('')}</select></label>
+        <label class="f" id="rpPlaceF"><span>สถานที่</span><input type="text" id="rpPlace" list="rpPlaces" value="${esc(d.place || '')}"><datalist id="rpPlaces">${RP_PLACES.map(p => `<option value="${esc(p)}">`).join('')}</datalist></label></div>
+      <label class="f"><span>ประเภท</span><select id="rpCat"><option value="">เลือกประเภท</option>${RP_CATS.map(c => `<option${c === d.category ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+      <label class="f"><span>อะไรเสีย *</span><input type="text" id="rpTitle" value="${esc(d.title || '')}"></label>
+      <label class="f"><span>รายละเอียด</span><textarea id="rpDetail" rows="3">${esc(d.detail || '')}</textarea></label>
+      <label class="chk"><input type="checkbox" id="rpUrgent"${d.urgent ? ' checked' : ''}> ด่วน</label>
+      <div class="f"><span>รูปถ่าย</span><div class="rp-photos" id="rpPhotos"></div><label class="btn sm" style="align-self:flex-start">${icon('upload')} เพิ่มรูป<input type="file" id="rpFile" accept="image/*" multiple hidden></label></div>
+      ${isNew ? '' : `<hr><div class="fields"><label class="f"><span>สถานะ</span><select id="rpStatus">${Object.entries(RP_STATUS).map(([k, l]) => `<option value="${k}"${k === d.status ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="f"><span>ช่าง / ผู้รับผิดชอบ</span><input type="text" id="rpTech" value="${esc(d.tech || '')}"></label></div>
+        <div class="fields"><label class="f"><span>ค่าใช้จ่าย (บาท)</span><input type="number" id="rpCost" min="0" value="${d.cost || ''}"></label><label class="f"><span>ซ่อมอะไรไป</span><input type="text" id="rpFix" value="${esc(d.fixNote || '')}"></label></div>
+        <div class="rp-hist">${(d.history || []).map(h => `<div><span class="mono">${fmtTime(h.at)}</span> ${esc(nameOf(h.by))} · ${esc(h.text)}</div>`).join('')}</div>`}
+    </div>
+    <div class="sheet-f">${!isNew && isAdmin() ? '<button class="btn danger" id="rpDel">ลบ</button>' : ''}<div class="spacer"></div><button class="btn" data-close>ยกเลิก</button><button class="btn primary" id="rpSave">${isNew ? 'แจ้งซ่อม' : 'บันทึก'}</button></div></div>`);
+  const v = id => m.el.querySelector('#' + id);
+  const syncPlace = () => { v('rpPlaceF').hidden = !!v('rpRoom').value; }; v('rpRoom').onchange = syncPlace; syncPlace();
+  const rid = d.id || Store.newId();
+  const drawPhotos = () => { v('rpPhotos').innerHTML = photos.map((p, i) => `<div class="rp-ph"><button class="btn sm ghost" data-phopen="${i}">${esc(p.name)}</button><button class="btn sm ghost" data-phdel="${i}" title="ลบ">✕</button></div>`).join('') || '<span class="hint">ยังไม่มีรูป</span>'; };
+  drawPhotos();
+  v('rpFile').onchange = async e => { const files = [...e.target.files]; e.target.value = '';
+    for (const file of files) { if (file.size > 15 * 1048576) { toast(`${file.name} ใหญ่เกิน 15 MB`, 'err'); continue; }
+      const path = `repairs/${rid}/${Date.now().toString(36)}_${file.name.replace(/[^\w.\-]+/g, '_').slice(-60)}`;
+      try { toast('กำลังอัปโหลดรูป…', 'info'); await Store.uploadFile(path, file, 'attachments'); photos.push({ path, name: file.name, size: file.size, type: file.type || '', at: Date.now(), by: Store.me?.id }); drawPhotos(); }
+      catch (er) { toast(errMsg(er), 'err'); } } };
+  v('rpPhotos').addEventListener('click', e => { const o = e.target.closest('[data-phopen]'); if (o) { const p = photos[+o.dataset.phopen]; if (p) openDoc({ ...p, bucket: 'attachments' }, 'open'); return; }
+    const x = e.target.closest('[data-phdel]'); if (x) { const p = photos.splice(+x.dataset.phdel, 1)[0]; drawPhotos(); if (p) Store.removeFile(p.path, 'attachments').catch(() => {}); } });
+  v('rpSave').onclick = async () => {
+    const title = v('rpTitle').value.trim(); if (!title) return toast('ใส่ว่าอะไรเสียก่อน', 'err');
+    const roomId = v('rpRoom').value, place = roomId ? '' : v('rpPlace').value.trim(); if (!roomId && !place) return toast('เลือกห้องหรือใส่สถานที่', 'err');
+    const now = Date.now(), me = Store.me?.id, hist = (d.history || []).slice();
+    const data = { ...d, roomId, place, category: v('rpCat').value, title, detail: v('rpDetail').value.trim(), urgent: v('rpUrgent').checked, photos, updatedAt: now, updatedBy: me };
+    if (isNew) Object.assign(data, { no: rpNextNo(), status: 'open', reportedBy: me, createdAt: now }), hist.push({ at: now, by: me, status: 'open', text: 'แจ้งซ่อม' });
+    else {
+      const st = v('rpStatus').value; Object.assign(data, { status: st, tech: v('rpTech').value.trim(), cost: +v('rpCost').value || 0, fixNote: v('rpFix').value.trim() });
+      if (st !== d.status) { hist.push({ at: now, by: me, status: st, text: RP_STATUS[st] + (data.fixNote && st === 'done' ? ' · ' + data.fixNote : '') }); if (st === 'done') Object.assign(data, { doneAt: now, doneBy: me }); }
+    }
+    data.history = hist; delete data.id;
+    if (await save(() => Store.put('repairs', rid, data), isNew ? `แจ้งซ่อมแล้ว · ${rpNo(data)}` : 'บันทึกแล้ว')) { logAct(`${isNew ? 'แจ้งซ่อม' : 'แก้งานซ่อม'} ${rpNo(data)}: ${rpWhere(data)} · ${title}`); m.close(); }
+  };
+  if (!isNew && isAdmin()) v('rpDel').onclick = async e => { const btn = e.currentTarget; if (!btn.dataset.sure) { btn.dataset.sure = 1; btn.textContent = 'กดอีกครั้งเพื่อลบ'; return; } if (await save(() => Store.del('repairs', d.id), 'ลบแล้ว')) { for (const p of photos) Store.removeFile(p.path, 'attachments').catch(() => {}); m.close(); } };
+}
+function bindRepairs() {
+  $('#rpNew').onclick = () => openRepair(null);
+  $('#rpQ').addEventListener('input', renderRepairs);
+  $('#rpChips').addEventListener('click', e => { const c = e.target.closest('[data-rpf]'); if (c) { S.rpFilter = c.dataset.rpf; renderRepairs(); } });
+  const open = e => { if (e.target.closest('[data-gorp]')) return setPage('repairs'); const it = e.target.closest('[data-rid]'); if (it) { const r = M.repairs.get(it.dataset.rid); if (r) openRepair(r); } };
+  $('#rpList').addEventListener('click', open);
+  const dl = $('#dlRepairs'); if (dl) dl.addEventListener('click', open);
+  const b = $('#dlRpNew'); if (b) b.onclick = () => openRepair(null);
 }

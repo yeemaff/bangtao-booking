@@ -2,7 +2,7 @@
    and writes through to the shared database. */
 const Store = (() => {
   const EMAIL_DOMAIN = 'staff.bangtaovillage.app';
-  const COLS = ['rooms', 'bookings', 'finance', 'guests', 'ops', 'state', 'settings', 'log', 'files', 'todos', 'tododone'];
+  const COLS = ['rooms', 'bookings', 'finance', 'guests', 'ops', 'state', 'settings', 'log', 'files', 'todos', 'tododone', 'repairs'];
   const maps = Object.fromEntries(COLS.map(c => [c, new Map()]));
   const staff = new Map();
   const listeners = new Set();

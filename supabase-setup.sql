@@ -189,3 +189,31 @@ begin
 end $$;
 
 -- เสร็จแล้ว ✓  ขั้นต่อไป: Authentication → Sign In / Providers → Email → ปิด "Confirm email" แล้วกด Save
+
+-- ===== แจ้งซ่อม (repairs) =====
+-- เก็บในตาราง docs (col = 'repairs') เหมือนข้อมูลอื่น จึงใช้สิทธิ์และ realtime ชุดเดียวกัน
+-- view นี้แสดงงานซ่อมเป็นตารางให้อ่านง่ายใน Supabase และไว้ต่อกับบอท LINE ภายหลัง (security_invoker = ใช้สิทธิ์ของคนที่อ่าน)
+create or replace view public.repairs with (security_invoker = true) as
+select d.id,
+       (d.data->>'no')::int                         as no,
+       d.data->>'status'                            as status,
+       coalesce((d.data->>'urgent')::boolean, false) as urgent,
+       d.data->>'roomId'                            as room_id,
+       r.data->>'no'                                as room_no,
+       d.data->>'place'                             as place,
+       d.data->>'category'                          as category,
+       d.data->>'title'                             as title,
+       d.data->>'detail'                            as detail,
+       d.data->>'tech'                              as technician,
+       nullif(d.data->>'cost', '')::numeric         as cost,
+       d.data->>'fixNote'                           as fix_note,
+       jsonb_array_length(coalesce(d.data->'photos', '[]'::jsonb)) as photos,
+       s.display_name                               as reported_by,
+       to_timestamp((d.data->>'createdAt')::bigint / 1000.0) as reported_at,
+       case when d.data ? 'doneAt' then to_timestamp((d.data->>'doneAt')::bigint / 1000.0) end as done_at,
+       d.updated_at
+from public.docs d
+left join public.docs r on r.col = 'rooms' and r.id = d.data->>'roomId'
+left join public.staff s on s.id::text = d.data->>'reportedBy'
+where d.col = 'repairs';
+grant select on public.repairs to authenticated;

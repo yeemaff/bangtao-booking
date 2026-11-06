@@ -60,23 +60,35 @@ ipcMain.handle('bv-print', async (e, landscape) => {
   return await new Promise(res => e.sender.print({ silent: false, printBackground: true, landscape: !!landscape }, (ok, reason) => res({ ok, reason: ok ? '' : String(reason || '') })));
 });
 // open a document from the app in the PC's default program (PDF reader, Word, …) so it can be printed there
-// download the shared booking sheet from Google Drive (read only; only Google hosts, only a file id)
+// download the shared booking sheet from Google Drive (read only; only Google hosts, only a file id).
+// Redirects are followed by hand so every hop can be checked to stay on Google.
+function bvGet(url, hops = 0) {
+  return new Promise((ok, no) => {
+    let u; try { u = new URL(url); } catch { return no(new Error('bad link')); }
+    if (u.protocol !== 'https:' || !/(^|\.)(google|googleusercontent)\.com$/.test(u.hostname)) return no(new Error('not a Google address: ' + u.hostname));
+    const req = require('https').get(u, { headers: { 'User-Agent': 'Mozilla/5.0 BangtaoBooking' } }, res => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) { res.resume(); if (hops > 8) return no(new Error('too many redirects')); return ok(bvGet(new URL(res.headers.location, u).toString(), hops + 1)); }
+      if (res.statusCode !== 200) { res.resume(); return no(new Error('HTTP ' + res.statusCode)); }
+      const parts = []; let n = 0;
+      res.on('data', c => { parts.push(c); n += c.length; if (n > 60 * 1048576) req.destroy(new Error('file too big')); });
+      res.on('end', () => ok(Buffer.concat(parts))); res.on('error', no);
+    });
+    req.setTimeout(60000, () => req.destroy(new Error('timeout')));
+    req.on('error', no);
+  });
+}
 ipcMain.handle('bv-fetch-sheet', async (_e, id) => {
   if (!/^[\w-]{20,}$/.test(String(id))) throw new Error('bad id');
-  const urls = [`https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`, `https://drive.google.com/uc?export=download&id=${id}`, `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`];
-  let last = '';
+  const urls = [`https://drive.google.com/uc?export=download&id=${id}`, `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`, `https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`];
+  const errs = [];
   for (const u of urls) {
     try {
-      const r = await net.fetch(u, { redirect: 'follow', cache: 'no-store' });
-      const host = new URL(r.url).hostname;
-      if (!/(^|\.)google(usercontent)?\.com$/.test(host)) { last = 'redirect ' + host; continue; }
-      if (!r.ok) { last = 'HTTP ' + r.status; continue; }
-      const buf = Buffer.from(await r.arrayBuffer());
-      if (buf.length < 1000 || buf[0] !== 0x50 || buf[1] !== 0x4b) { last = 'not an xlsx (sharing must be “Anyone with the link”)'; continue; }
+      const buf = await bvGet(u);
+      if (buf.length < 1000 || buf[0] !== 0x50 || buf[1] !== 0x4b) { errs.push('not an xlsx (sharing must be “Anyone with the link”)'); continue; }
       return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length);
-    } catch (e) { last = e.message; }
+    } catch (e) { errs.push(e.message); }
   }
-  throw new Error('ดาวน์โหลดไฟล์ไม่ได้: ' + last);
+  throw new Error('ดาวน์โหลดไฟล์ไม่ได้: ' + errs.join(' / '));
 });
 ipcMain.handle('bv-open-file', async (_e, name, data) => {
   const dir = path.join(os.tmpdir(), 'BangtaoDocs'); fs.mkdirSync(dir, { recursive: true });
