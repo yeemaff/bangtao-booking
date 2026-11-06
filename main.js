@@ -108,7 +108,7 @@ function setupUpdates() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on('update-available', i => send('bv-update', { state: 'downloading', version: i.version }));
-  autoUpdater.on('update-downloaded', i => send('bv-update', { state: 'ready', version: i.version }));
+  autoUpdater.on('update-downloaded', i => { send('bv-update', { state: 'ready', version: i.version }); try { if (win && !win.isFocused()) win.flashFrame(true); } catch {} });
   autoUpdater.on('error', () => {});
   ipcMain.on('bv-restart', () => autoUpdater.quitAndInstall(false, true));
   ipcMain.handle('bv-check', async () => { try { const r = await autoUpdater.checkForUpdates(); return r && r.updateInfo ? r.updateInfo.version : null; } catch { return null; } });
@@ -139,7 +139,7 @@ function setupMacUpdates(autoUpdater, send) {
       await new Promise((ok, no) => execFile('/usr/bin/ditto', ['-x', '-k', zip, dir], e => e ? no(e) : ok()));
       const appDir = fs.readdirSync(dir).find(n => n.endsWith('.app')); if (!appDir) throw new Error('no app in zip');
       ready = { src: path.join(dir, appDir), version: info.version };
-      send('bv-update', { state: 'ready', version: info.version });
+      send('bv-update', { state: 'ready', version: info.version }); try { app.dock && app.dock.bounce('informational'); } catch {}
     } catch (e) { console.warn('mac update', e); } finally { busy = false; }
   });
   autoUpdater.on('error', () => {});

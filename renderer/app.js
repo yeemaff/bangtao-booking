@@ -1,5 +1,5 @@
 'use strict';
-const VERSION = '1.3.9';
+const VERSION = '1.3.10';
 
 /* ================= utilities ================= */
 const $ = (s, el = document) => el.querySelector(s);
@@ -3170,11 +3170,12 @@ function exportInHouse(d) {
 if (window.bvDesktop && window.bvDesktop.onUpdate) window.bvDesktop.onUpdate(info => {
   let el = document.getElementById('updBar');
   if (!el) { el = document.createElement('div'); el.id = 'updBar'; document.body.appendChild(el); }
-  if (info.state === 'ready') {
-    el.innerHTML = `<span>มีเวอร์ชันใหม่ ${esc(info.version)} พร้อมแล้ว</span><button class="btn primary sm" id="updGo">รีสตาร์ทเพื่ออัปเดต</button><button class="btn ghost sm" id="updLater">ภายหลัง</button>`;
+  if (info.state === 'ready') { // a box in the middle of the screen, so nobody misses it
+    el.className = 'upd-center';
+    el.innerHTML = `<div class="upd-box" role="dialog" aria-modal="true"><div class="upd-ic">${icon('refresh')}</div><h3>มีเวอร์ชันใหม่ ${esc(info.version)}</h3><p>ดาวน์โหลดเสร็จแล้ว · กดรีสตาร์ทเพื่ออัปเดต ใช้เวลาไม่กี่วินาที ข้อมูลไม่หาย</p><div class="upd-actions"><button class="btn ghost" id="updLater">ภายหลัง</button><button class="btn primary" id="updGo">รีสตาร์ทเพื่ออัปเดต</button></div></div>`;
     el.querySelector('#updGo').onclick = () => window.bvDesktop.restartToUpdate();
     el.querySelector('#updLater').onclick = () => { el.remove(); toast('จะอัปเดตเองตอนปิดโปรแกรม'); };
-  } else el.innerHTML = `<span>กำลังดาวน์โหลดเวอร์ชันใหม่ ${esc(info.version)}…</span>`;
+  } else { el.className = ''; el.innerHTML = `<span>กำลังดาวน์โหลดเวอร์ชันใหม่ ${esc(info.version)}…</span>`; }
 });
 boot();
 
