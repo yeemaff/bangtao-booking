@@ -1,7 +1,7 @@
 {
   "name": "bangtao-village-booking",
   "productName": "Bangtao Village Booking",
-  "version": "1.3.8",
+  "version": "1.3.9",
   "description": "ระบบจองห้องพัก Bangtao Village Resort",
   "author": "Bangtao Village Resort",
   "main": "main.js",

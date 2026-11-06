@@ -1,5 +1,5 @@
 'use strict';
-const VERSION = '1.3.8';
+const VERSION = '1.3.9';
 
 /* ================= utilities ================= */
 const $ = (s, el = document) => el.querySelector(s);
@@ -806,7 +806,7 @@ function pagesHtml() {
         <div class="row" style="margin-top:8px;gap:8px"><span>เตือนรถรับส่งก่อนเวลา</span><select id="nfLead" style="width:auto">${[15, 30, 60, 90, 120].map(m => `<option value="${m}">${m < 60 ? m + ' นาที' : m / 60 + ' ชั่วโมง'}</option>`).join('')}</select><span class="hint">· วันเกิดแขกเตือนตอน 8 โมงเช้า · รถของพรุ่งนี้ที่ยังไม่ได้จองเตือนตอน 5 โมงเย็น</span></div>
         <div class="hint owe" id="nfPerm"></div></div>
       <div class="card" id="xsCard"><div class="card-head"><h3>ดึงข้อมูลจาก Excel อัตโนมัติ</h3><div class="spacer"></div><button class="btn sm primary" id="xsNow">${icon('refresh')} ดึงตอนนี้</button><label class="btn sm" title="ใช้ไฟล์ที่ดาวน์โหลดไว้แทน">เลือกไฟล์<input type="file" id="xsFile" accept=".xlsx" hidden></label></div>
-        <div class="hint">ดึงการจองและตารางรถรับส่งสนามบินจาก Excel บน Google Drive มาอัปเดตในแอป ทุก 3 ชั่วโมง · ไม่มีการเขียนกลับไปที่ Excel · ข้อมูลที่แก้ใน Excel จะใช้ตาม Excel · ที่แก้ในแอปอย่างเดียวจะเก็บไว้ และขึ้นรายการที่ไม่ตรงกับ Excel ให้ตรวจ</div>
+        <div class="hint">ดึงการจองและตารางรถรับส่งสนามบินจาก Excel บน Google Drive มาอัปเดตในแอป ทุก 30 นาที · ไม่มีการเขียนกลับไปที่ Excel · ข้อมูลที่แก้ใน Excel จะใช้ตาม Excel · ที่แก้ในแอปอย่างเดียวจะเก็บไว้ และขึ้นรายการที่ไม่ตรงกับ Excel ให้ตรวจ</div>
         <div class="fields"><label class="f w2"><span>ลิงก์ไฟล์ Excel (Google Drive)</span><input type="url" id="xsUrl" placeholder="https://docs.google.com/spreadsheets/d/…"></label></div>
         <div class="row"><label class="chk"><input type="checkbox" id="xsAuto"> ดึงอัตโนมัติ</label><button class="btn sm" id="xsSaveCfg">บันทึก</button></div>
         <div class="hint" id="xsStatus"></div><div id="xsConflicts"></div></div>
@@ -2623,7 +2623,8 @@ function xsTxStatus() {
   const st = M.state.get('xlsync') || {}, desk = !!(window.bvDesktop && window.bvDesktop.fetchSheet), err = st.error && (st.errorAt || 0) > (st.at || 0);
   const um = (st.tx && st.tx.unmatched || []).length;
   const line = !st.at && !err ? 'ยังไม่เคยดึงตารางรถจาก Excel' : err ? `ดึงจาก Excel ไม่สำเร็จ ${fmtTime(st.errorAt)} · ${esc(st.error)}` : `ดึงจาก Excel ล่าสุด ${fmtTime(st.at)}${um ? ` · หาการจองไม่เจอ ${um} รายการ (ดูที่ตั้งค่า)` : ''}`;
-  return `<div class="tx-sync${err ? ' owe' : ''}"><span>${line}</span>${desk ? '<button class="btn sm ghost" data-xsnow>ดึงตอนนี้</button>' : ''}</div>`;
+  if (!err) return ''; // syncing runs by itself; only a failure is shown here
+  return `<div class="tx-sync owe"><span>${line}</span>${desk ? '<button class="btn sm ghost" data-xsnow>ลองใหม่</button>' : ''}</div>`;
 }
 function renderTaxiCard(d) {
   const list = transfersOn(d), el = $('#txList'); if (!el) return;
@@ -2635,7 +2636,7 @@ function renderTaxiCard(d) {
       <div class="tx-main"><b>ห้อง ${esc(roomNo(b.roomId))} · ${esc(b.guest)}</b><span>${esc(txLine(t))}${t.flight ? ' · ✈ ' + esc(t.flight) : ''}${t.pax ? ' · ' + t.pax + ' คน' : ''}</span>${t.driver || t.plate || t.phone ? `<span class="tx-drv">${icon('car')} ${esc([t.driver, t.plate].filter(Boolean).join(' · ') || 'คนขับ')}${t.phone ? ` · <a href="tel:${esc(t.phone)}">${esc(t.phone)}</a>` : ''}</span>` : ''}${t.note ? `<span>${esc(t.note)}</span>` : ''}</div>
       <select class="tx-st" data-bid="${esc(b.id)}" data-tid="${esc(t.id)}">${Object.entries(TX_STATUS).map(([k, l]) => `<option value="${k}"${k === (t.status || 'need') ? ' selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')
     : '<div class="empty">ไม่มีรถรับส่งวันนี้</div>';
-  el.innerHTML += soon + xsTxStatus();
+  el.innerHTML += soon + (isAdmin() ? xsTxStatus() : '');
 }
 
 /* ================= RESERVATION SHEET (print for the guest) ================= */
@@ -3183,7 +3184,7 @@ boot();
 // Rules: whatever the sheet changed wins (even if the app also changed it) · what only the app changed is kept,
 // and every sync lists the stays where the app no longer matches the sheet, so the sheet can be brought up to date.
 // The "Airport transfer service Schedule" tables in the sheet go into each guest's ride list.
-const XS_EVERY = 3 * 3600e3;
+const XS_EVERY = 30 * 60e3; // pull the sheet every 30 minutes
 const xsDriveId = url => { const m = String(url || '').match(/\/d\/([\w-]{20,})/) || String(url || '').match(/[?&]id=([\w-]{20,})/); return m ? m[1] : ''; };
 const xsHash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
 const xsSig = it => xsHash(JSON.stringify([it.kind, it.roomNo, it.checkIn, it.checkOut, it.kind === 'block' ? it.reason : it.guest, it.notes, it.color || '']));
@@ -3412,7 +3413,7 @@ function xsAutoStart() {
   const tick = () => { const s = settings(), st = M.state.get('xlsync') || {}; if (!s.xlsxAuto || !xsDriveId(s.xlsxUrl) || !Store.online) return;
     if (Date.now() - (st.at || 0) < XS_EVERY) return;
     xsRun('auto').then(r => { if (r && (r.added || r.updated || r.moved || r.cancelled || (r.tx && r.tx.added + r.tx.changed))) { toast(xsMsg(r)); pushNotif('excel', null, null, xsMsg(r).replace('ดึงจาก Excel แล้ว · ', '')); } }).catch(e => { console.warn('excel sync', e); if (isAdmin()) toast('ดึงข้อมูลจาก Excel ไม่สำเร็จ: ' + errMsg(e), 'err'); }); };
-  setTimeout(tick, 20000); setInterval(tick, 10 * 60e3);
+  setTimeout(tick, 15000); setInterval(tick, 5 * 60e3);
 }
 function renderXsCard() {
   const box = $('#xsCard'); if (!box) return;
