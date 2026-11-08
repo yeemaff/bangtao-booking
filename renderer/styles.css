@@ -887,3 +887,264 @@ body.g-dragging,body.g-dragging *{cursor:grabbing!important;user-select:none!imp
 .upd-ic svg{width:26px;height:26px}
 .upd-actions{display:flex;gap:10px;justify-content:center}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+/* extra beds & cots under the rooms in the booking chart */
+.g-group.eq-group{display:flex;align-items:center;gap:8px;border-top:2px solid var(--line)}
+.g-group.eq-group .btn{margin-left:auto;height:24px;padding:0 10px;font-size:12px}
+.g-row.eq-row .g-rh .no{font-size:12px}
+.g-row.eq-row.over .g-lane{background:repeating-linear-gradient(135deg,transparent 0 8px,color-mix(in srgb,var(--red) 7%,transparent) 8px 16px)}
+.g-row.eq-row.over .g-rh .ty{color:var(--red)}
+.btn.toggle[aria-pressed="true"]{background:var(--accent-soft,rgba(20,140,160,.14));border-color:var(--accent);color:var(--accent)}
+.pop.ctx small{color:var(--muted);margin-left:6px;font-size:11px}
+.h1-tag{font-size:13px;font-weight:600;vertical-align:middle;margin-left:6px;padding:2px 8px;border-radius:6px;background:#1d6f42;color:#fff;letter-spacing:.02em}
+#gView{margin:0 0 10px}#gView button{display:inline-flex;align-items:center;gap:6px}#gView svg{width:15px;height:15px}
+/* switching between rooms and extra beds / cots */
+.g-body.g-in-r{animation:gInR .32s cubic-bezier(.2,.8,.2,1)}
+.g-body.g-in-l{animation:gInL .32s cubic-bezier(.2,.8,.2,1)}
+@keyframes gInR{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
+@keyframes gInL{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+#gView{position:relative}
+#gView button{transition:background .25s ease,color .25s ease}
+@media (prefers-reduced-motion:reduce){.g-body.g-in-r,.g-body.g-in-l{animation:none}}
+
+/* =====================================================================
+   Visual refresh (v1.4): clean neutral SaaS look — near-white ground, hairline borders,
+   barely-there shadows, Inter for Latin + IBM Plex Sans Thai, green accent, dark buttons.
+   Layout is unchanged; only tokens and component skins are overridden below.
+   ===================================================================== */
+:root{
+  --bg:#f7f7f8; --surface:#ffffff; --surface-2:#fafafa; --surface-3:#f1f1f3; --sidebar:#f7f7f8;
+  --ink:#111113; --ink-2:#3f3f46; --muted:#71717a; --line:#e7e7ea; --line-2:#f0f0f2;
+  --accent:#2f9e44; --accent-2:#37b24d; --accent-ink:#ffffff; --accent-soft:#ebf7ee; --accent-softer:#f4fbf5;
+  --btn:#18181b; --btn-ink:#ffffff; --btn-hover:#27272a;
+  --green:#2f9e44; --green-soft:#ebf7ee; --amber:#d97706; --amber-soft:#fef6e7; --red:#e03131; --red-soft:#fdeeee;
+  --blue:#3b6fe0; --blue-soft:#eef3fd; --violet:#7c5ce0; --violet-soft:#f3f0fd; --orange:#ec6a12; --orange-soft:#fef1e8;
+  --weekend:#fafafa; --today:rgba(47,158,68,.08);
+  --shadow-sm:0 1px 2px rgba(17,17,19,.04); --shadow:0 16px 40px rgba(17,17,19,.12),0 2px 6px rgba(17,17,19,.05);
+  --f-display:'Inter','IBM Plex Sans Thai','Segoe UI',system-ui,sans-serif;
+  --f-body:'Inter','IBM Plex Sans Thai','Segoe UI',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0e0e10; --surface:#161618; --surface-2:#1b1b1e; --surface-3:#232327; --sidebar:#0e0e10;
+  --ink:#f4f4f5; --ink-2:#d4d4d8; --muted:#a1a1aa; --line:#27272a; --line-2:#1f1f22;
+  --accent:#4ade80; --accent-2:#6ee79a; --accent-ink:#06210f; --accent-soft:#12291a; --accent-softer:#0f1f15;
+  --btn:#f4f4f5; --btn-ink:#111113; --btn-hover:#e4e4e7;
+  --green:#4ade80; --green-soft:#12291a; --amber:#fbbf24; --amber-soft:#2b2210; --red:#f87171; --red-soft:#2d1515;
+  --blue:#7aa2ff; --blue-soft:#151d33; --violet:#a78bfa; --violet-soft:#1f1833; --orange:#fb923c; --orange-soft:#2d1b0e;
+  --weekend:#19191c; --today:rgba(74,222,128,.08); --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow:0 16px 40px rgba(0,0,0,.55) }}
+:root[data-theme="dark"]{
+  --bg:#0e0e10; --surface:#161618; --surface-2:#1b1b1e; --surface-3:#232327; --sidebar:#0e0e10;
+  --ink:#f4f4f5; --ink-2:#d4d4d8; --muted:#a1a1aa; --line:#27272a; --line-2:#1f1f22;
+  --accent:#4ade80; --accent-2:#6ee79a; --accent-ink:#06210f; --accent-soft:#12291a; --accent-softer:#0f1f15;
+  --btn:#f4f4f5; --btn-ink:#111113; --btn-hover:#e4e4e7;
+  --green:#4ade80; --green-soft:#12291a; --amber:#fbbf24; --amber-soft:#2b2210; --red:#f87171; --red-soft:#2d1515;
+  --blue:#7aa2ff; --blue-soft:#151d33; --violet:#a78bfa; --violet-soft:#1f1833; --orange:#fb923c; --orange-soft:#2d1b0e;
+  --weekend:#19191c; --today:rgba(74,222,128,.08); --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow:0 16px 40px rgba(0,0,0,.55) }
+
+body{font-size:14px;letter-spacing:-.003em}
+h1{font-size:22px;font-weight:600;letter-spacing:-.02em} h2{font-size:18px;letter-spacing:-.015em} h3{font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+.num,.g-day b,.g-rh .no,.roomtag,.tl .t{font-family:var(--f-body);font-variant-numeric:tabular-nums}
+
+/* sidebar: same ground as the page, active item is a white pill with a hairline */
+.side{background:var(--sidebar);border-right:1px solid var(--line)}
+.logo b{font-weight:600;letter-spacing:-.01em}
+.nav button{color:var(--ink-2);padding:8px 12px;border-radius:9px;border:1px solid transparent;font-weight:500}
+.nav button:hover{background:var(--surface-3)}
+.nav button[aria-current="page"]{background:var(--surface);color:var(--ink);border-color:var(--line);box-shadow:var(--shadow-sm)}
+.nav button[aria-current="page"] svg{color:var(--ink)}
+.nav button .badge{background:var(--surface-3);color:var(--ink-2);font-weight:600}
+.nav button[aria-current="page"] .badge{background:var(--ink);color:var(--surface)}
+.side-card{background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:var(--shadow-sm)}
+.side-card small{color:var(--muted);opacity:1}
+.side-card .meter{background:var(--surface-3)} .side-card .meter i{background:var(--accent);opacity:1}
+.side-card button{background:var(--btn);color:var(--btn-ink)}
+
+/* cards, stats, inputs */
+.card,.stat,.gscroll,.g-tools{border-radius:14px;border-color:var(--line);box-shadow:var(--shadow-sm)}
+.card{padding:18px 20px}
+.iconbtn{border-radius:9px;border-color:var(--line);color:var(--ink-2)}
+.iconbtn:hover{background:var(--surface-3)}
+.search input[type=search]{border-radius:10px}
+input:focus,select:focus,textarea:focus{border-color:var(--ink-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--ink) 8%,transparent)}
+input[type=checkbox]{accent-color:var(--ink)}
+
+/* buttons: dark primary like "Get started", hairline secondary */
+.btn{border-radius:9px;border-color:var(--line);font-weight:500;box-shadow:var(--shadow-sm)}
+.btn:hover{border-color:color-mix(in srgb,var(--ink) 25%,var(--line));background:var(--surface-2)}
+.btn.primary{background:var(--btn);border-color:var(--btn);color:var(--btn-ink);box-shadow:0 1px 2px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.08)}
+.btn.primary:hover{background:var(--btn-hover);border-color:var(--btn-hover)}
+.btn.ghost{box-shadow:none}
+.seg{border-radius:10px;padding:3px;gap:2px;background:var(--surface-3);border-color:transparent}
+.seg button{border-radius:8px;padding:6px 12px;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm),0 0 0 1px var(--line)}
+.chip{border-color:var(--line)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+
+/* status pills: bordered with a coloured dot */
+.pill{border:1px solid var(--line);background:var(--surface)!important;color:var(--ink-2)!important;font-weight:500;padding:1px 9px 1px 8px}
+.pill::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--muted);flex:none}
+.p-confirmed::before{background:var(--blue)} .p-checked_in::before{background:var(--green)} .p-tentative::before{background:var(--amber)}
+.p-checked_out::before{background:var(--muted)} .p-cancelled::before,.p-noshow::before,.p-block::before,.p-bad::before{background:var(--red)} .p-vip::before{background:var(--violet)}
+.p-bad{color:var(--red)!important;border-color:color-mix(in srgb,var(--red) 35%,var(--line))}
+
+/* KPI tiles: white, icon + label on one line, sparkline underneath */
+.kpi{background:var(--surface)!important;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-sm);padding:16px 18px 8px}
+.kpi .ic{width:auto;height:auto;background:none!important;margin:0;color:var(--ink)!important;position:absolute}
+.kpi{position:relative}
+.kpi > span{padding-left:28px;font-weight:500;color:var(--ink);font-size:13.5px;line-height:20px}
+.kpi .ic svg{width:19px;height:19px}
+.kpi b{font-size:24px;font-weight:600;letter-spacing:-.02em;margin-top:8px}
+.kpi .delta em{border:1px solid var(--line);background:var(--surface)}
+.quick button,.quick.svc button{border-radius:14px;border-color:var(--line);box-shadow:var(--shadow-sm)}
+.quick button:hover{border-color:color-mix(in srgb,var(--ink) 25%,var(--line));transform:none}
+.quick .qi{background:var(--surface-3);color:var(--ink);border-radius:10px}
+.quick.svc .sv-v{font-weight:600;letter-spacing:-.02em}
+
+/* lists, tables, timeline */
+.bk-item{border-color:var(--line-2);border-radius:12px;box-shadow:none}
+.bk-item:hover{border-color:var(--line);background:var(--surface-2)}
+.roomtag{border-radius:9px}
+th{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:0;background:transparent}
+td{border-bottom-color:var(--line-2)}
+tr.click:hover td{background:var(--surface-2)}
+.tl .box{border-radius:10px}
+.hk-sum div{border-radius:12px}
+.notice{border-radius:10px}
+.sheet{border-radius:16px;border:1px solid var(--line)}
+.overlay{backdrop-filter:blur(2px)}
+.toast{border-radius:10px}
+
+/* booking chart */
+.g-day.td{background:var(--ink);color:var(--surface);border-radius:7px 7px 0 0}
+.g-day.td b{color:var(--surface)}
+.bk{border-radius:7px}
+.h1-tag{background:var(--accent);color:var(--accent-ink)}
+
+/* ---------- dashboard calendar (redesigned) ---------- */
+.cal2 .card-head{gap:6px}
+.cal2-title{display:flex;align-items:center;gap:8px}
+.cal2-title svg{width:17px;height:17px}
+.cal2-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal2-grid .dow{font-size:11px;color:var(--muted);text-align:center;padding:2px 0 6px;font-weight:500}
+.cal2-grid button{position:relative;height:44px;border:1px solid transparent;border-radius:10px;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:6px;color:var(--ink);font-size:13px;font-variant-numeric:tabular-nums;transition:background .15s,border-color .15s}
+.cal2-grid button:hover{background:var(--surface-3)}
+.cal2-grid button.out{color:var(--muted);opacity:.45}
+.cal2-grid button .bar{position:absolute;left:8px;right:8px;bottom:7px;height:3px;border-radius:2px;background:var(--surface-3);overflow:hidden}
+.cal2-grid button .bar i{display:block;height:100%;background:var(--accent);border-radius:2px}
+.cal2-grid button .bar.full i{background:var(--red)}
+.cal2-grid button .arr{position:absolute;top:5px;right:6px;width:5px;height:5px;border-radius:50%;background:var(--orange)}
+.cal2-grid button.today{font-weight:700;color:var(--accent)}
+.cal2-grid button.today::after{content:'';position:absolute;top:21px;width:4px;height:4px;border-radius:50%;background:var(--accent)}
+.cal2-grid button.cur{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.cal2-grid button.cur .bar{background:color-mix(in srgb,var(--surface) 25%,transparent)}
+.cal2-grid button.cur.today::after{background:var(--surface)}
+.cal2-foot{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);align-items:center}
+.cal2-foot .lg-bar{display:inline-block;width:16px;height:3px;border-radius:2px;background:var(--accent);vertical-align:middle;margin-right:5px}
+.cal2-foot .lg-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--orange);vertical-align:middle;margin-right:5px}
+.cal2-day{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid var(--line-2);padding-top:12px}
+.cal2-day div{display:flex;flex-direction:column}
+.cal2-day span{font-size:11.5px;color:var(--muted)} .cal2-day b{font-size:17px;font-weight:600;letter-spacing:-.01em}
+.dash-day{display:inline-flex;align-items:center;gap:8px;margin-left:8px;padding:2px 4px 2px 10px;border:1px solid var(--line);border-radius:99px;background:var(--surface);font-size:12.5px;color:var(--ink-2)}
+.dash-day button{border:0;border-radius:99px;background:var(--btn);color:var(--btn-ink);font:inherit;font-size:12px;padding:2px 10px;cursor:pointer}
+.dash-fade{animation:dashFade .25s ease}
+@keyframes dashFade{from{opacity:.35}to{opacity:1}}
+#gView{display:inline-flex;width:auto;align-self:flex-start}
+/* sliding highlight: menu + calendar */
+.nav{position:relative}
+.nav-ind{position:absolute;left:0;top:0;border-radius:9px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-sm);pointer-events:none;opacity:0;transition:transform .32s cubic-bezier(.3,.8,.25,1),height .32s cubic-bezier(.3,.8,.25,1),width .2s,opacity .2s}
+.nav button{position:relative;z-index:1}
+.nav button[aria-current="page"]{background:transparent;border-color:transparent;box-shadow:none}
+.cal2-wrap{position:relative}
+.cal2-ind{position:absolute;left:0;top:0;border-radius:10px;background:var(--ink);pointer-events:none;opacity:0;transition:transform .3s cubic-bezier(.3,.8,.25,1),opacity .2s}
+.cal2-grid button{z-index:1}
+.cal2-grid button.cur{background:transparent;border-color:transparent;transition:color .2s .05s}
+.cal2-grid.cal-in-r{animation:calInR .3s cubic-bezier(.2,.8,.2,1)} .cal2-grid.cal-in-l{animation:calInL .3s cubic-bezier(.2,.8,.2,1)}
+@keyframes calInR{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+@keyframes calInL{from{opacity:0;transform:translateX(-24px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.nav-ind,.cal2-ind{transition:none}.cal2-grid.cal-in-r,.cal2-grid.cal-in-l{animation:none}}
+/* booking chart: same channel colours, toned down (less neon) by mixing in a little grey */
+.bk.chan{background:color-mix(in oklab,var(--bc) 74%,#80858c)}
+.bk.chan.s-tentative{background:repeating-linear-gradient(135deg,color-mix(in oklab,var(--bc) 74%,#80858c) 0 8px,color-mix(in oklab,var(--bc) 50%,#fff) 8px 16px)}
+.legend i{filter:saturate(.8)}
+.eq-sw{display:inline-block;width:10px;height:10px;border-radius:3px;flex:none}
+/* selected day: outline only, no fill */
+.cal2-ind{background:transparent;border:1.5px solid var(--ink)}
+.cal2-grid button.cur{color:var(--ink)}
+.cal2-grid button.cur.today{color:var(--accent)}
+.cal2-grid button.cur .bar{background:var(--surface-3)}
+.cal2-grid button.cur .bar i{background:var(--accent)}
+.cal2-grid button.cur.today::after{background:var(--accent)}
+/* no black fills: soft green tint for primary actions and highlights, small arrival dots */
+:root{--btn:#e3f3e7;--btn-ink:#1f7a37;--btn-hover:#d4ecdb;--btn-line:#c8e6d0}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--btn:#15301f;--btn-ink:#86e0a5;--btn-hover:#1b3b27;--btn-line:#23492f}}
+:root[data-theme="dark"]{--btn:#15301f;--btn-ink:#86e0a5;--btn-hover:#1b3b27;--btn-line:#23492f}
+.btn.primary{border:1px solid var(--btn-line);box-shadow:none;font-weight:600}
+.btn.primary:hover{border-color:var(--btn-line)}
+.side-card button{border:1px solid var(--btn-line)}
+.g-day.td{background:var(--btn);color:var(--btn-ink)} .g-day.td b{color:var(--btn-ink)}
+.chip[aria-pressed="true"]{background:var(--btn);color:var(--btn-ink);border-color:var(--btn-line)}
+.nav button[aria-current="page"] .badge{background:var(--btn);color:var(--btn-ink)}
+.cal2-ind{border-color:var(--accent)}
+.cal2-grid button .arr{width:3.5px;height:3.5px;top:7px;right:8px;opacity:.85}
+.cal2-foot .lg-dot{width:4px;height:4px}
+
+/* calendar: today is just bold (no colour, no dot); the chosen day only gets the gliding outline */
+.cal2-grid button.today,.cal2-grid button.cur.today{color:var(--ink);font-weight:700}
+.cal2-grid button.today::after{display:none}
+.cal2-grid button.cur .bar{background:var(--surface-3)} .cal2-grid button.cur .bar i{background:var(--accent)}
+/* room plan, minimal: no colour bands or tinted cards; status is a small dot + text, blocked rooms a faint hatch */
+.room{border-color:var(--line);box-shadow:var(--shadow-sm)}
+.room .band{height:0}
+.room.st-in,.room.st-ready,.room.st-arr,.room.st-dep,.room.st-vacant{background:var(--surface)}
+.room.st-block{background:repeating-linear-gradient(135deg,var(--surface-2) 0 7px,var(--surface) 7px 14px)}
+.room .rst{background:transparent!important;border:1px solid var(--line);color:var(--ink-2)!important;font-weight:500}
+.room .rst i{width:6px;height:6px}
+.st-vacant .rst i{background:var(--muted)} .st-ready .rst i{background:var(--green)} .st-in .rst i{background:var(--green)}
+.st-arr .rst i{background:var(--blue)} .st-dep .rst i{background:var(--orange)} .st-block .rst i{background:var(--red)}
+.room .rno{font-family:var(--f-body);font-weight:600}
+.room:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.bldg{background:var(--surface-3);color:var(--ink-2)}
+.bldg::after{background:var(--surface)}
+/* filter chips: selected = soft tint, count stays readable */
+.chip[aria-pressed="true"] b{color:var(--btn-ink);opacity:.75}
+/* no green focus ring on mouse clicks in the menu */
+.nav button:focus:not(:focus-visible){outline:none}
+.room .rst{padding:1px 6px 1px 5px;gap:3px;font-size:9.5px}
+.day-in-r{animation:dayInR .3s cubic-bezier(.2,.8,.2,1)} .day-in-l{animation:dayInL .3s cubic-bezier(.2,.8,.2,1)}
+@keyframes dayInR{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:none}}
+@keyframes dayInL{from{opacity:0;transform:translateX(-22px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.day-in-r,.day-in-l{animation:none}}
+.txt-up,.txt-down{display:inline-block}
+h1.txt-up,h1.txt-down{display:block}
+.txt-up{animation:txtUp .32s cubic-bezier(.2,.8,.2,1)} .txt-down{animation:txtDown .32s cubic-bezier(.2,.8,.2,1)}
+@keyframes txtUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes txtDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.txt-up,.txt-down{animation:none}}
+/* must beat the page-open animation (.page:not([hidden])>*) */
+.page:not([hidden])>.day-in-r{animation:dayInR .34s cubic-bezier(.2,.8,.2,1) backwards}
+.page:not([hidden])>.day-in-l{animation:dayInL .34s cubic-bezier(.2,.8,.2,1) backwards}
+.page:not([hidden])>.day-in-r:nth-child(n+2),.page:not([hidden])>.day-in-l:nth-child(n+2){animation-delay:.03s}
+.page:not([hidden])>.day-in-r:nth-child(n+3),.page:not([hidden])>.day-in-l:nth-child(n+3){animation-delay:.06s}
+@keyframes dayInR{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
+@keyframes dayInL{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:none}}
+/* changing the day uses the same rise-and-fade as opening a page (no sideways slide) */
+.page:not([hidden])>.day-in-r,.page:not([hidden])>.day-in-l{animation:bvRise .42s cubic-bezier(.2,.75,.25,1) backwards}
+.page:not([hidden])>.day-in-r:nth-child(2),.page:not([hidden])>.day-in-l:nth-child(2){animation-delay:.03s}
+.page:not([hidden])>.day-in-r:nth-child(3),.page:not([hidden])>.day-in-l:nth-child(3){animation-delay:.06s}
+.page:not([hidden])>.day-in-r:nth-child(4),.page:not([hidden])>.day-in-l:nth-child(4){animation-delay:.09s}
+.page:not([hidden])>.day-in-r:nth-child(n+5),.page:not([hidden])>.day-in-l:nth-child(n+5){animation-delay:.12s}
+/* same motion as bvRise, under its own name so it restarts on every day change */
+@keyframes bvRiseDay{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.page:not([hidden])>.day-in-r,.page:not([hidden])>.day-in-l{animation-name:bvRiseDay}
+/* slower, softer page motion + text that eases in */
+.page:not([hidden]){animation:bvPageIn .55s cubic-bezier(.2,.75,.25,1) backwards}
+.page:not([hidden])>*{animation:bvRise .7s cubic-bezier(.2,.75,.25,1) backwards}
+.page:not([hidden])>*:nth-child(2){animation-delay:.06s} .page:not([hidden])>*:nth-child(3){animation-delay:.12s}
+.page:not([hidden])>*:nth-child(4){animation-delay:.18s} .page:not([hidden])>*:nth-child(5){animation-delay:.24s}
+.page:not([hidden])>*:nth-child(n+6){animation-delay:.3s}
+.page:not([hidden])>.day-in-r,.page:not([hidden])>.day-in-l{animation-duration:.7s}
+@keyframes bvText{from{opacity:0;transform:translateY(8px);filter:blur(4px)}to{opacity:1;transform:none;filter:none}}
+.page:not([hidden]) .page-head h1{animation:bvText .8s cubic-bezier(.2,.75,.25,1) .05s backwards}
+.page:not([hidden]) .page-head .sub{animation:bvText .8s cubic-bezier(.2,.75,.25,1) .18s backwards}
+.page:not([hidden]) .card h3,.page:not([hidden]) .kpi > span,.page:not([hidden]) .stat > span,.page:not([hidden]) .sv-l{animation:bvText .7s cubic-bezier(.2,.75,.25,1) .25s backwards}
+.kpi b,.quick.svc .sv-v,.stat b,.side-card b,.cal2-day b{font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:reduce){.page:not([hidden]) .page-head h1,.page:not([hidden]) .page-head .sub,.page:not([hidden]) .card h3,.page:not([hidden]) .kpi > span,.page:not([hidden]) .stat > span,.page:not([hidden]) .sv-l{animation:none}}

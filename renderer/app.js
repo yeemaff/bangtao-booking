@@ -1,5 +1,5 @@
 'use strict';
-const VERSION = '1.3.10';
+const VERSION = '1.4.0';
 
 /* ================= utilities ================= */
 const $ = (s, el = document) => el.querySelector(s);
@@ -173,6 +173,7 @@ const TAGS = { vip: 'VIP', regular: 'แขกประจำ', blacklist: 'ห�
 const BLOCK_REASONS = ['ซ่อมแอร์', 'ซ่อมประปา', 'ซ่อมไฟฟ้า', 'รีโนเวท', 'ทาสี', 'ทำความสะอาดใหญ่', 'ห้องพักพนักงาน', 'กันห้องไว้'];
 const DEFAULT_SETTINGS = {
   xlsxUrl: 'https://docs.google.com/spreadsheets/d/1h4xZwDAZ2292qbFXmeXd1gEg7ozKU8MG/edit', xlsxAuto: true,
+  xlsxEquipUrl: 'https://drive.google.com/file/d/1k8tVUNTHHa3L0fNgWtR4_HAbbs4FS5s0/view',
   hotelName: 'Bangtao Village Resort', elecRate: 8, times: '14:00 / 12:00', extraBedStock: 6, babyCotStock: 3,
   channels: ['Walk-in', 'Email / โทร', 'WhatsApp', 'Booking.com', 'Agoda', 'Trip.com', 'Expedia', 'Hotelbeds', 'Biblio Globus', 'Airbnb', 'แขกประจำ / รายเดือน', 'อื่นๆ'],
 };
@@ -399,9 +400,9 @@ function showFirstAdmin() {
 }
 
 /* ================= main shell ================= */
-const SUB_PAGES = { equip: 'dashboard' }; // pages opened from the dashboard, not listed in the menu
+const SUB_PAGES = {}; // pages opened from the dashboard, not listed in the menu
 const NAV = [
-  ['dashboard', 'แดชบอร์ด', 'dashboard'], ['daily', 'งานประจำวัน', 'clipboard'], ['chart', 'ผังการจอง', 'calendar'], ['plan', 'ห้องพัก', 'map'], ['repairs', 'แจ้งซ่อม', 'wrench'],
+  ['dashboard', 'แดชบอร์ด', 'dashboard'], ['daily', 'งานประจำวัน', 'clipboard'], ['chart', 'ตารางการจอง (Excel)', 'calendar'], ['plan', 'ห้องพัก', 'map'], ['repairs', 'แจ้งซ่อม', 'wrench'],
   ['guests', 'ฐานข้อมูลแขก', 'users'], ['docs', 'เอกสาร', 'file'], ['reports', 'รายงานการเงิน', 'chart', true], ['users', 'ผู้ใช้งาน', 'key', 'owner'], ['settings', 'ตั้งค่า', 'settings'],
 ];
 let unsub = null;
@@ -481,9 +482,9 @@ function notifTick() {
       const m = String(x.time || '').match(/^(\d{1,2}):(\d{2})/); if (!m) continue;
       const left = +m[1] * 60 + +m[2] + plus - mins;
       if (left > 0 && left <= (+c.lead || 60) && fresh(`tx:${day}:${x.id}:${x.time}`))
-        pushNotif('taxi', b, null, `${x.type === 'pickup' ? 'รับ' : x.type === 'dropoff' ? 'ส่ง' : 'รถ'} ห้อง ${roomNo(b.roomId)} · ${b.guest}\n${x.time} · ${txLine(x)}${x.flight ? ' · ✈ ' + x.flight : ''}${x.pax ? ' · ' + x.pax + ' คน' : ''}${x.status === 'need' ? '\nยังไม่ได้จองรถ' : x.driver || x.plate ? '\n' + [x.driver, x.plate].filter(Boolean).join(' · ') : ''}`, `รถรับส่งอีก ${left} นาที`);
+        pushNotif('taxi', b, null, `${x.type === 'pickup' ? 'รับ' : x.type === 'dropoff' ? 'ส่ง' : 'รถ'} ห้อง ${roomNo(b.roomId)} · ${b.guest}\n${x.time} · ${txLine(x)}${x.flight ? ' · ✈ ' + x.flight : ''}${x.pax ? ' · ' + x.pax + ' คน' : ''}${txSt(x) === 'need' ? '\nยังไม่จองรถ' : x.driver || x.plate ? '\n' + [x.driver, x.plate].filter(Boolean).join(' · ') : ''}`, `รถรับส่งอีก ${left} นาที`);
     }
-    if (mins >= 17 * 60) { const tm = addDays(t, 1), need = transfersOn(tm).filter(x => x.t.status === 'need');
+    if (mins >= 17 * 60) { const tm = addDays(t, 1), need = transfersOn(tm).filter(x => txSt(x.t) === 'need');
       if (need.length && fresh(`txtm:${tm}`)) pushNotif('taxi', need[0].b, null, need.map(({ b, t: x }) => `${x.time || '—'} ${x.type === 'pickup' ? 'รับ' : 'ส่ง'} ห้อง ${roomNo(b.roomId)} · ${b.guest}`).join('\n'), `พรุ่งนี้มีรถ ${need.length} เที่ยวที่ยังไม่ได้จองรถ`); }
   }
   if (c.bday && mins >= 8 * 60) for (const x of upcomingBirthdays(1)) if (fresh(`bd:${x.date}:${x.g.id}`))
@@ -522,7 +523,7 @@ function shellHtml() {
   return `<div class="shell${collapsed ? ' collapsed' : ''}" id="shell">
     <aside class="side">
       <div class="logo"><img class="mark mark-img" src="icon.png" alt=""><div><b>Bangtao Village</b><span>Booking System</span></div></div>
-      <nav class="nav" id="nav">
+      <nav class="nav" id="nav"><i class="nav-ind" aria-hidden="true"></i>
         <div class="nav-label">เมนู</div>
         ${NAV.map(([k, label, ic, admin]) => `<button data-page="${k}"${admin === 'owner' ? ' data-owner="1"' : admin ? ' data-admin="1"' : ''} title="${label}">${icon(ic)}<span>${label}</span>${k === 'daily' ? '<em class="badge" id="navDaily" hidden></em>' : k === 'repairs' ? '<em class="badge" id="navRepairs" hidden></em>' : ''}</button>`).join('')}
       </nav>
@@ -544,7 +545,7 @@ function shellHtml() {
 }
 function bindShell() {
   $('#nav').addEventListener('click', e => { const b = e.target.closest('[data-page]'); if (b) setPage(b.dataset.page); });
-  $('#collapse').onclick = () => { const s = $('#shell'); s.classList.toggle('collapsed'); lsSet('bv.collapsed', s.classList.contains('collapsed')); scheduleRender(); };
+  $('#collapse').onclick = () => { const s = $('#shell'); s.classList.toggle('collapsed'); lsSet('bv.collapsed', s.classList.contains('collapsed')); scheduleRender(); requestAnimationFrame(() => slideTo($('#nav .nav-ind'), $('#nav [aria-current="page"]'))); };
   $('#topNew').onclick = () => openBooking(null, { checkIn: todayStr(), checkOut: addDays(todayStr(), 1) });
   $('#userchip').onclick = e => openUserMenu(e.currentTarget);
   $('#refreshBtn').onclick = refreshAll;
@@ -571,9 +572,11 @@ function setPage(p, opt = {}) {
   if ((!NAV.some(n => n[0] === p) && !SUB_PAGES[p]) || ((p === 'users' && !isOwner()) || (p === 'reports' && !isAdmin()))) p = 'dashboard';
   S.page = p; lsSet('bv.page', p);
   $$('#nav [data-page]').forEach(b => b.setAttribute('aria-current', b.dataset.page === (SUB_PAGES[p] || p) ? 'page' : 'false'));
+  slideTo($('#nav .nav-ind'), $('#nav [aria-current="page"]'));
   $$('#content > section').forEach(s => s.hidden = s.id !== 'p-' + p);
   $('#content').scrollTop = 0;
   render();
+  requestAnimationFrame(() => rollNumbers($('#p-' + p)));
 }
 function renderSync() { const el = $('#sync'); if (!el) return; el.className = 'sync ' + (Store.online ? 'ok' : 'err'); el.querySelector('span').textContent = Store.statusText; el.title = Store.online ? '' : 'กดเพื่อเชื่อมต่อใหม่'; el.style.cursor = Store.online ? '' : 'pointer'; if (!el.dataset.bound) { el.dataset.bound = 1; el.addEventListener('click', () => { if (!Store.online) Store.reconnect(true); }); } }
 function render() {
@@ -582,7 +585,7 @@ function render() {
   $$('[data-owner]').forEach(b => b.hidden = !isOwner());
   $$('.quick [data-staff]').forEach(b => b.hidden = isAdmin());
   renderSync(); renderSideCard(); renderBirthdayBadge();
-  const r = { dashboard: renderDashboard, plan: renderPlan, chart: renderChart, daily: renderDaily, repairs: renderRepairs, equip: renderEquip, guests: S.gView === 'channel' ? renderChannels : renderGuests, docs: renderDocs, reports: renderReports, users: renderUsers, settings: renderSettings }[S.page];
+  const r = { dashboard: renderDashboard, plan: renderPlan, chart: renderChart, daily: renderDaily, repairs: renderRepairs, guests: S.gView === 'channel' ? renderChannels : renderGuests, docs: renderDocs, reports: renderReports, users: renderUsers, settings: renderSettings }[S.page];
   try { r && r(); } catch (e) { console.error(e); }
   labelDates($('#p-' + S.page));
 }
@@ -666,12 +669,15 @@ function pagesHtml() {
     <div class="page-head"><div><h1 id="dHello">สวัสดี</h1><div class="sub" id="dSub"></div></div></div>
     <div class="dash"><div class="dash-main">
       <div class="kpis" id="dKpis"></div>
-      <div><h3 style="margin-bottom:12px">บริการวันนี้</h3><div class="quick svc" id="dSvc"></div></div>
+      <div><h3 style="margin-bottom:12px" id="dSvcTitle">บริการวันนี้</h3><div class="quick svc" id="dSvc"></div></div>
       <div class="card"><div class="card-head"><h3>การจองล่าสุด</h3><div class="spacer"></div><button class="btn sm" data-goto="chart">ดูทั้งหมด</button></div><div class="bk-list" id="dRecent"></div></div>
     </div><div class="dash-side">
       <div class="side-card" id="sideCard"></div>
-      <div class="card cal"><div class="card-head"><h3 id="calTitle"></h3><div class="spacer"></div><button class="iconbtn" id="calPrev" style="width:32px;height:32px">${icon('left')}</button><button class="iconbtn" id="calNext" style="width:32px;height:32px">${icon('right')}</button></div><div class="cal-grid" id="calGrid"></div><div class="hint">สีเข้มขึ้น = มีแขกมากขึ้น · จุดส้ม = มีแขกเข้า กดวันที่เพื่อดูงานของวันนั้น</div></div>
-      <div class="card"><div class="card-head"><h3>ตารางวันนี้</h3><div class="spacer"></div><button class="btn sm" data-goto="daily">ดูงานประจำวัน</button></div><div class="timeline" id="dTimeline"></div></div>
+      <div class="card cal2"><div class="card-head"><h3 class="cal2-title">${icon('calendar')}<span id="calTitle"></span></h3><div class="spacer"></div><button class="iconbtn" id="calToday" title="กลับวันนี้" style="width:auto;height:30px;padding:0 10px;font-size:12px">วันนี้</button><button class="iconbtn" id="calPrev" style="width:30px;height:30px">${icon('left')}</button><button class="iconbtn" id="calNext" style="width:30px;height:30px">${icon('right')}</button></div>
+        <div class="cal2-wrap"><i class="cal2-ind" aria-hidden="true"></i><div class="cal2-grid" id="calGrid"></div></div>
+        <div class="cal2-foot"><span><i class="lg-bar"></i>ห้องที่มีแขก</span><span><i class="lg-dot"></i>มีแขกเข้า</span></div>
+        <div class="cal2-day" id="calDay"></div></div>
+      <div class="card"><div class="card-head"><h3 id="dTlTitle">ตารางวันนี้</h3><div class="spacer"></div><button class="btn sm" data-goto="daily">ดูงานประจำวัน</button></div><div class="timeline" id="dTimeline"></div></div>
       <div class="card"><div class="card-head"><h3>เตียงเสริม / เปลเด็ก</h3><div class="spacer"></div><button class="btn sm" data-goto="equip">ดูผังทั้งเดือน</button></div><div id="dEquip"></div></div>
       <div class="card"><div class="card-head"><h3>วันเกิดแขก</h3><div class="spacer"></div><button class="btn sm" id="dBdayAll">ดูทั้งเดือน</button></div><div id="dBday"></div></div>
       <div class="card"><div class="card-head"><h3>งานแม่บ้าน</h3><div class="spacer"></div><button class="btn sm" data-goto="plan">ดูแผนผัง</button></div><div class="hk-sum" id="dHk"></div></div>
@@ -686,10 +692,11 @@ function pagesHtml() {
   </section>
 
   <section class="page" id="p-chart" hidden>
-    <div class="page-head"><div><h1>ผังการจอง</h1><div class="sub">ลากเพื่อย้าย · ลากขอบเพื่อเปลี่ยนวัน · ลากในช่องว่างเพื่อจองใหม่ · คลิกเพื่อแก้ไข · คลิกขวาเพื่อดูเมนู</div></div><div class="spacer"></div>
+    <div class="page-head"><div><h1>ตารางการจอง <span class="h1-tag">Excel</span></h1><div class="sub">ลากเพื่อย้าย · ลากขอบเพื่อเปลี่ยนวัน · ลากในช่องว่างเพื่อจองใหม่ · คลิกเพื่อแก้ไข · คลิกขวาเพื่อดูเมนู</div></div><div class="spacer"></div>
       </div>
+    <div class="seg gview" id="gView"><button type="button" data-gview="rooms">${icon('door')} ห้องพัก</button><button type="button" data-gview="equip">${icon('bed')} เตียงเสริม / เปลเด็ก</button></div>
     <div class="g-tools" id="gTools">
-      <div class="gt-grp"><button class="btn sm primary" id="gtNew">${icon('plus')} จองใหม่</button><button class="btn sm" id="gtBlock">ปิดห้อง / ซ่อม</button><button class="btn sm" id="findFree">${icon('door')} หาห้องว่าง</button></div>
+      <div class="gt-grp"><button class="btn sm primary" id="gtNew">${icon('plus')} จองใหม่</button><button class="btn sm" id="gtBlock">ปิดห้อง / ซ่อม</button><button class="btn sm" id="findFree">${icon('door')} หาห้องว่าง</button><input type="file" id="eqFile" accept=".xlsx,.xls" hidden></div>
       <div class="gt-grp"><button class="btn sm" id="gtUndo" title="เลิกทำ (Ctrl+Z)" disabled>↶ เลิกทำ</button></div>
       <div class="gt-grp"><span class="gt-l">แสดง</span><select id="gtRange" class="inline"><option value="1">1 เดือน</option><option value="2">2 เดือน</option><option value="3">3 เดือน</option></select>
         <span class="gt-l">ซูม</span><button class="btn sm" id="gtZoomOut" title="ย่อ">−</button><span id="gtZoomVal" class="gt-v">100%</span><button class="btn sm" id="gtZoomIn" title="ขยาย">+</button></div>
@@ -764,15 +771,6 @@ function pagesHtml() {
       <tr><td>การเชื่อมต่อฐานข้อมูล (รหัส BV1:)</td><td>✓</td><td>—</td><td>—</td></tr></tbody></table></div>
   </section>
 
-  <section class="page" id="p-equip" hidden>
-    <div class="page-head"><div><button class="btn sm ghost" data-goto="dashboard" style="margin-bottom:6px">${icon('left')} แดชบอร์ด</button><h1>เตียงเสริม / เปลเด็ก</h1><div class="sub">ดูว่าแต่ละคืนใช้เตียงเสริมและเปลเด็กไปกี่ตัว ใครใช้อยู่ · ใส่จำนวนได้ที่การจองแต่ละรายการ</div></div><div class="spacer"></div>
-      <div class="row"><button class="btn" id="eqImportBtn" data-fin="1">${icon('xls')} นำเข้าจาก Excel</button><input type="file" id="eqFile" accept=".xlsx,.xls" hidden>
-      <div class="datebar"><button class="btn sm" id="eqPrev">${icon('left')} เดือนก่อน</button><b id="eqMonthLabel" style="min-width:150px;text-align:center"></b><button class="btn sm" id="eqNext">เดือนถัดไป ${icon('right')}</button><button class="btn sm" id="eqToday">เดือนนี้</button></div></div></div>
-    <div class="statgrid" id="eqStats"></div>
-    <div class="gscroll eq" id="eqScroll"></div>
-    <div class="legend"><span><i class="s-confirmed"></i>เตียงเสริม</span><span><i class="s-cot"></i>เปลเด็ก</span><span><i class="s-over"></i>เกินจำนวนที่มี</span></div>
-    <div class="card"><div class="card-head"><h3>รายการเดือนนี้</h3><span class="hint" id="eqCount"></span></div><div class="tw" id="eqList"></div></div>
-  </section>
 
   <section class="page" id="p-settings" hidden>
     <div class="page-head"><div><h1>ตั้งค่า</h1></div></div>
@@ -788,7 +786,7 @@ function pagesHtml() {
         <label class="f"><span>จำนวนเปลเด็ก (Baby cot) ที่มี</span><input type="number" id="sCot" min="0"></label>
         <label class="f w2"><span>ช่องทางการจอง (บรรทัดละหนึ่งช่องทาง)</span><textarea id="sChannels" rows="5"></textarea></label></div>
         <div class="row"><button class="btn primary" id="sSave">บันทึก</button><span class="hint" id="adminHint"></span></div></div>
-      <div class="card" id="chanColorCard"><h3>สีของช่องทางการจอง</h3><div class="hint">สีที่ใช้ในผังการจอง ตั้งให้ตรงกับที่ใช้ใน Excel เดิม</div><div id="chanColors" class="chan-colors"></div>
+      <div class="card" id="chanColorCard"><h3>สีของช่องทางการจอง</h3><div class="hint">สีที่ใช้ในตารางการจอง ตั้งให้ตรงกับที่ใช้ใน Excel เดิม</div><div id="chanColors" class="chan-colors"></div>
         <div class="row"><button class="btn primary" id="ccSave">บันทึกสี</button><button class="btn ghost" id="ccReset">ใช้สีเริ่มต้น</button></div></div>
       <div class="card" data-owner="1"><h3>การเชื่อมต่อ</h3>
         <div class="hint">ทุกเครื่องที่ใช้รหัสเชื่อมต่อเดียวกันจะเห็นข้อมูลชุดเดียวกัน ติดตั้งโปรแกรมบนเครื่องใหม่แล้ววางรหัสนี้ตอนเปิดครั้งแรก</div>
@@ -806,8 +804,9 @@ function pagesHtml() {
         <div class="row" style="margin-top:8px;gap:8px"><span>เตือนรถรับส่งก่อนเวลา</span><select id="nfLead" style="width:auto">${[15, 30, 60, 90, 120].map(m => `<option value="${m}">${m < 60 ? m + ' นาที' : m / 60 + ' ชั่วโมง'}</option>`).join('')}</select><span class="hint">· วันเกิดแขกเตือนตอน 8 โมงเช้า · รถของพรุ่งนี้ที่ยังไม่ได้จองเตือนตอน 5 โมงเย็น</span></div>
         <div class="hint owe" id="nfPerm"></div></div>
       <div class="card" id="xsCard"><div class="card-head"><h3>ดึงข้อมูลจาก Excel อัตโนมัติ</h3><div class="spacer"></div><button class="btn sm primary" id="xsNow">${icon('refresh')} ดึงตอนนี้</button><label class="btn sm" title="ใช้ไฟล์ที่ดาวน์โหลดไว้แทน">เลือกไฟล์<input type="file" id="xsFile" accept=".xlsx" hidden></label></div>
-        <div class="hint">ดึงการจองและตารางรถรับส่งสนามบินจาก Excel บน Google Drive มาอัปเดตในแอป ทุก 30 นาที · ไม่มีการเขียนกลับไปที่ Excel · ข้อมูลที่แก้ใน Excel จะใช้ตาม Excel · ที่แก้ในแอปอย่างเดียวจะเก็บไว้ และขึ้นรายการที่ไม่ตรงกับ Excel ให้ตรวจ</div>
-        <div class="fields"><label class="f w2"><span>ลิงก์ไฟล์ Excel (Google Drive)</span><input type="url" id="xsUrl" placeholder="https://docs.google.com/spreadsheets/d/…"></label></div>
+        <div class="hint">ดึงการจอง ตารางรถรับส่งสนามบิน และเตียงเสริม / เปลเด็กจาก Excel บน Google Drive มาอัปเดตในแอป ทุก 30 นาที · ไม่มีการเขียนกลับไปที่ Excel · ข้อมูลที่แก้ใน Excel จะใช้ตาม Excel · ที่แก้ในแอปอย่างเดียวจะเก็บไว้ และขึ้นรายการที่ไม่ตรงกับ Excel ให้ตรวจ</div>
+        <div class="fields"><label class="f w2"><span>ลิงก์ไฟล์ Booking Schedule (Google Drive)</span><input type="url" id="xsUrl" placeholder="https://docs.google.com/spreadsheets/d/…"></label></div>
+        <div class="fields"><label class="f w2"><span>ลิงก์ไฟล์ Extra bed &amp; Baby cot (Google Drive)</span><input type="url" id="xsEqUrl" placeholder="https://drive.google.com/file/d/…"></label></div>
         <div class="row"><label class="chk"><input type="checkbox" id="xsAuto"> ดึงอัตโนมัติ</label><button class="btn sm" id="xsSaveCfg">บันทึก</button></div>
         <div class="hint" id="xsStatus"></div><div id="xsConflicts"></div></div>
       <div class="card" data-fin="1"><h3>นำเข้าข้อมูลจาก Excel เดิม</h3><div class="hint">ดาวน์โหลดไฟล์ Booking Schedule จาก Google Drive เป็น .xlsx แล้วเลือกไฟล์ ระบบอ่านช่องที่ผสานเป็นช่วงวันพัก นำเข้าซ้ำได้โดยไม่เกิดรายการซ้ำ</div><input type="file" id="xFile" accept=".xlsx,.xls"><div id="xPreview"></div></div>
@@ -824,20 +823,28 @@ function bindPages() {
   $('#p-dashboard').addEventListener('click', e => {
     const q = e.target.closest('[data-q]')?.dataset.q;
     if (q === 'new') openBooking(null, { checkIn: todayStr(), checkOut: addDays(todayStr(), 1) });
-    if (q === 'guest') openGuest(null); if (q === 'free') openFinder(); if (q === 'rates') openRates(); if (q === 'taxi') setPage('daily'); if (q === 'equip') setPage('equip'); if (q === 'inhouse') openInHouse(todayStr()); if (q === 'report') setPage('reports'); if (q === 'daily') setPage('daily'); if (q === 'bday') openBirthdayPop(e.target.closest('[data-q]'));
+    if (q === 'guest') openGuest(null); if (q === 'free') openFinder(); if (q === 'rates') openRates(); if (q === 'taxi') setPage('daily'); if (q === 'equip') { S.gMode = 'equip'; lsSet('bv.gMode', 'equip'); setPage('chart'); } if (q === 'inhouse') openInHouse(todayStr()); if (q === 'report') setPage('reports'); if (q === 'daily') setPage('daily'); if (q === 'bday') openBirthdayPop(e.target.closest('[data-q]'));
     const it = e.target.closest('[data-bk]'); if (it) { const b = M.bookings.get(it.dataset.bk); if (b) openBooking(b); }
     const d = e.target.closest('[data-day]'); if (d) { S.day = d.dataset.day; setPage('daily'); }
+    const cd = e.target.closest('[data-cday]'); if (cd) { const v = cd.dataset.cday; S.dashDay = v === todayStr() ? null : v; S.day = v; if (v.slice(0, 7) !== S.calMonth) S.calMonth = v.slice(0, 7); renderDashboard(); rollNumbers($('#p-dashboard')); const k = $('#dKpis'); if (k) { k.classList.remove('dash-fade'); void k.offsetWidth; k.classList.add('dash-fade'); } }
   });
   $('#content').addEventListener('click', e => { const g = e.target.closest('[data-goto]'); if (g) setPage(g.dataset.goto); });
   $('#dBdayAll').onclick = () => openBirthdays(todayStr().slice(0, 7));
-  $('#calPrev').onclick = () => { const d = parseD(S.calMonth + '-01'); d.setUTCMonth(d.getUTCMonth() - 1); S.calMonth = toStr(d).slice(0, 7); renderDashboard(); };
-  $('#calNext').onclick = () => { const d = parseD(S.calMonth + '-01'); d.setUTCMonth(d.getUTCMonth() + 1); S.calMonth = toStr(d).slice(0, 7); renderDashboard(); };
+  $('#calPrev').onclick = () => { S.calAnim = 'cal-in-l'; const d = parseD(S.calMonth + '-01'); d.setUTCMonth(d.getUTCMonth() - 1); S.calMonth = toStr(d).slice(0, 7); renderDashboard(); };
+  $('#calNext').onclick = () => { S.calAnim = 'cal-in-r'; const d = parseD(S.calMonth + '-01'); d.setUTCMonth(d.getUTCMonth() + 1); S.calMonth = toStr(d).slice(0, 7); renderDashboard(); };
+  $('#calToday').onclick = () => { S.dashDay = null; S.calMonth = todayStr().slice(0, 7); renderDashboard(); };
   // date bars
   for (const p of ['p', 'dl']) {
-    $(`#${p}Prev`).onclick = () => { S.day = addDays(S.day, -1); render(); };
-    $(`#${p}Next`).onclick = () => { S.day = addDays(S.day, 1); render(); };
-    $(`#${p}Today`).onclick = () => { S.day = todayStr(); render(); };
-    $(`#${p}Date`).onchange = e => { if (validD(e.target.value)) { S.day = e.target.value; render(); } };
+    // the page content slides in from the side you moved to (earlier day = from the left)
+    const go = d => { if (!validD(d) || d === S.day) return; const dir = d < S.day ? 'day-in-l' : 'day-in-r'; S.day = d; render(); rollNumbers($(`#p-${p === 'dl' ? 'daily' : 'plan'}`));
+      [...$(`#p-${p === 'dl' ? 'daily' : 'plan'}`).children].forEach(el => { el.classList.remove('day-in-l', 'day-in-r'); void el.offsetWidth; el.classList.add(dir); })
+      // the date text rises in, like the rest of the page
+      const roll = 'txt-up', inp = $(`#${p}Date`);
+      [$(`#${p}Title`), inp && inp._btn && inp._btn.querySelector('span'), inp && inp._lab].forEach(el => { if (!el) return; el.classList.remove('txt-up', 'txt-down'); void el.offsetWidth; el.classList.add(roll); }); };
+    $(`#${p}Prev`).onclick = () => go(addDays(S.day, -1));
+    $(`#${p}Next`).onclick = () => go(addDays(S.day, 1));
+    $(`#${p}Today`).onclick = () => go(todayStr());
+    $(`#${p}Date`).onchange = e => go(e.target.value);
   }
   // plan
   $('#plan').addEventListener('click', e => { const t = e.target.closest('.room'); if (t) openRoomPanel(t.dataset.room, S.day); });
@@ -851,7 +858,7 @@ function bindPages() {
   $('#gMonthBtn').onclick = e => openMonthPicker(e.currentTarget);
   $('#findFree').onclick = () => openFinder();
   // daily
-  bindDaily(); bindEquip();
+  bindDaily(); bindEquipChart();
   // guests
   bindChannels(); bindDocs(); bindTodos(); bindRepairs();
   $('#gViews').addEventListener('click', e => { const b = e.target.closest('[data-gview]'); if (!b) return; S.gView = b.dataset.gview; lsSet('bv.gView', S.gView);
@@ -883,6 +890,8 @@ function bindPages() {
 }
 
 /* ================= DASHBOARD ================= */
+// green when the line ends higher than it started, red when lower (like the reference dashboard)
+const trendCol = v => (v[v.length - 1] || 0) >= (v[Math.max(0, v.length - 8)] || 0) ? 'var(--green)' : 'var(--red)';
 function spark(vals, color) {
   const W = 200, H = 42, max = Math.max(1, ...vals), min = Math.min(0, ...vals), n = vals.length;
   const pts = vals.map((v, i) => [i * (W / (n - 1)), H - 4 - (v - min) / (max - min || 1) * (H - 10)]);
@@ -896,19 +905,22 @@ function delta(a, b) {
   const p = (a - b) / b * 100; const up = p >= 0;
   return `<em class="${up ? 'up' : 'down'}">${up ? '↑' : '↓'} ${Math.abs(p).toFixed(0)}%</em>`;
 }
+const dashDay = () => S.dashDay || todayStr();
 function renderDashboard() {
-  const t = todayStr(), me = Store.me;
+  const t = dashDay(), isToday = t === todayStr(), me = Store.me, NT = isToday ? 'คืนนี้' : ' ' + fmtShort(t), DT = isToday ? 'วันนี้' : ' ' + fmtShort(t);
+  { const h = $('#dTlTitle'); if (h) h.textContent = isToday ? 'ตารางวันนี้' : 'ตาราง ' + fmtShort(t); }
   const h = new Date().getHours();
   $('#dHello').textContent = `${h < 12 ? 'สวัสดีตอนเช้า' : h < 17 ? 'สวัสดีตอนบ่าย' : 'สวัสดีตอนเย็น'}, ${me?.display_name || me?.username || ''}`;
-  $('#dSub').textContent = `ภาพรวมของ ${settings().hotelName} · ${fmtLong(t)}`;
+  $('#dSub').innerHTML = `ภาพรวมของ ${esc(settings().hotelName)} · ${fmtLong(t)}${isToday ? '' : `<span class="dash-day">กำลังดูวันที่ ${fmtShort(t)}<button type="button" id="dashBack">กลับวันนี้</button></span>`}`;
+  { const bk = $('#dashBack'); if (bk) bk.onclick = () => { S.dashDay = null; S.calMonth = todayStr().slice(0, 7); renderDashboard(); }; }
   const days = Array.from({ length: 14 }, (_, i) => addDays(t, i - 13));
   const ms = days.map(dayMetrics); const m = ms[13], y = ms[12];
   $('#dKpis').innerHTML = `
-    ${canStats() ? `<div class="kpi k-violet"><div class="ic">${icon('wallet')}</div><span>รายได้ค่าห้องคืนนี้</span><b>฿${money(m.rev)}</b><div class="delta">${delta(m.rev, y.rev)} เทียบเมื่อวาน</div>${spark(ms.map(x => x.rev), 'var(--violet)')}</div>`
-      : `<div class="kpi k-violet"><div class="ic">${icon('users')}</div><span>แขกที่พักคืนนี้</span><b>${m.pax}<small style="font-size:15px;color:var(--muted)"> ท่าน</small></b><div class="delta">${delta(m.pax, y.pax)} เทียบเมื่อวาน</div>${spark(ms.map(x => x.pax), 'var(--violet)')}</div>`}
-    <div class="kpi k-green"><div class="ic">${icon('bed')}</div><span>ห้องมีแขกคืนนี้</span><b>${m.occ}<small style="font-size:15px;color:var(--muted)"> / ${m.sellable}</small></b><div class="delta">${delta(m.occ, y.occ)} เทียบเมื่อวาน</div>${spark(ms.map(x => x.occ), 'var(--green)')}</div>
-    <div class="kpi k-blue"><div class="ic">${icon('arrowin')}</div><span>เช็คอินวันนี้</span><b>${m.arr}</b><div class="delta"><em>${m.arrDone} เข้าแล้ว</em> · ออก ${m.dep}</div>${spark(ms.map(x => x.arr), 'var(--blue)')}</div>
-    <div class="kpi k-orange"><div class="ic">${icon('pie')}</div><span>อัตราการเข้าพัก</span><b>${Math.round(m.pct)}%</b><div class="delta">${delta(m.pct, y.pct)} เทียบเมื่อวาน</div>${spark(ms.map(x => x.pct), 'var(--orange)')}</div>`;
+    ${canStats() ? `<div class="kpi k-violet"><div class="ic">${icon('wallet')}</div><span>รายได้ค่าห้อง${NT}</span><b>฿${money(m.rev)}</b><div class="delta">${delta(m.rev, y.rev)} เทียบเมื่อวาน</div>${spark(ms.map(x => x.rev), trendCol(ms.map(x => x.rev)))}</div>`
+      : `<div class="kpi k-violet"><div class="ic">${icon('users')}</div><span>แขกที่พัก${NT}</span><b>${m.pax}<small style="font-size:15px;color:var(--muted)"> ท่าน</small></b><div class="delta">${delta(m.pax, y.pax)} เทียบเมื่อวาน</div>${spark(ms.map(x => x.pax), trendCol(ms.map(x => x.pax)))}</div>`}
+    <div class="kpi k-green"><div class="ic">${icon('bed')}</div><span>ห้องมีแขก${NT}</span><b>${m.occ}<small style="font-size:15px;color:var(--muted)"> / ${m.sellable}</small></b><div class="delta">${delta(m.occ, y.occ)} เทียบเมื่อวาน</div>${spark(ms.map(x => x.occ), trendCol(ms.map(x => x.occ)))}</div>
+    <div class="kpi k-blue"><div class="ic">${icon('arrowin')}</div><span>เช็คอิน${DT}</span><b>${m.arr}</b><div class="delta"><em>${m.arrDone} เข้าแล้ว</em> · ออก ${m.dep}</div>${spark(ms.map(x => x.arr), trendCol(ms.map(x => x.arr)))}</div>
+    <div class="kpi k-orange"><div class="ic">${icon('pie')}</div><span>อัตราการเข้าพัก</span><b>${Math.round(m.pct)}%</b><div class="delta">${delta(m.pct, y.pct)} เทียบเมื่อวาน</div>${spark(ms.map(x => x.pct), trendCol(ms.map(x => x.pct)))}</div>`;
   const near = b => Math.abs(diffDays(t, b.checkIn));
   const recent = allBookings().filter(b => b.kind !== 'block').sort((a, b) => String(b._at || '').localeCompare(String(a._at || '')) || near(a) - near(b)).slice(0, 6);
   $('#dRecent').innerHTML = recent.length ? recent.map(b => { const r = roomById(b.roomId) || {}; const g = b.guestId ? M.guests.get(b.guestId) : null; return `
@@ -919,13 +931,18 @@ function renderDashboard() {
   // calendar
   const first = parseD(S.calMonth + '-01'); const start = addDays(S.calMonth + '-01', -first.getUTCDay());
   $('#calTitle').textContent = `${MON_FULL[first.getUTCMonth()]} ${first.getUTCFullYear()}`;
-  let cg = DOW.map(d => `<div class="dow">${d.toUpperCase()}</div>`).join('');
+  const DOW_TH = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+  let cg = DOW_TH.map(d => `<div class="dow">${d}</div>`).join('');
   for (let i = 0; i < 42; i++) {
-    const d = addDays(start, i); const mm = dayMetrics(d);
-    const lvl = mm.pct >= 85 ? 4 : mm.pct >= 60 ? 3 : mm.pct >= 30 ? 2 : mm.pct > 0 ? 1 : 0;
-    cg += `<button data-day="${d}" class="${d.slice(0, 7) !== S.calMonth ? 'out ' : ''}${lvl ? 'o' + lvl + ' ' : ''}${d === t ? 'today ' : ''}${d === S.day && d !== t ? 'sel' : ''}" title="${fmtLong(d)} · มีแขก ${mm.occ} ห้อง${mm.arr ? ' · เข้า ' + mm.arr : ''}">${parseD(d).getUTCDate()}${mm.arr ? '<i></i>' : ''}</button>`;
+    const d = addDays(start, i), mm = dayMetrics(d), pct = Math.round(mm.pct);
+    cg += `<button data-cday="${d}" class="${d.slice(0, 7) !== S.calMonth ? 'out ' : ''}${d === todayStr() ? 'today ' : ''}${d === t ? 'cur' : ''}" title="${fmtLong(d)} · มีแขก ${mm.occ}/${mm.sellable} ห้อง (${pct}%)${mm.arr ? ' · เข้า ' + mm.arr : ''}${mm.dep ? ' · ออก ' + mm.dep : ''}">${parseD(d).getUTCDate()}${mm.arr ? '<i class="arr"></i>' : ''}<span class="bar${pct >= 100 ? ' full' : ''}"><i style="width:${Math.min(100, pct)}%"></i></span></button>`;
   }
   $('#calGrid').innerHTML = cg;
+  if (!S.calAnim) slideTo($('.cal2-ind'), $('#calGrid button.cur'));
+  else { const ind = $('.cal2-ind'); if (ind) { ind.style.opacity = 0; setTimeout(() => slideTo(ind, $('#calGrid button.cur')), 300); } }
+  if (S.calAnim) { const g = $('#calGrid'); g.classList.remove('cal-in-l', 'cal-in-r'); void g.offsetWidth; g.classList.add(S.calAnim); S.calAnim = null; }
+  $('#calToday').hidden = isToday && S.calMonth === todayStr().slice(0, 7);
+  $('#calDay').innerHTML = `<div><span>${isToday ? 'คืนนี้' : fmtShort(t)} มีแขก</span><b>${m.occ}/${m.sellable}</b></div><div><span>เข้า</span><b>${m.arr}</b></div><div><span>ออก</span><b>${m.dep}</b></div>`;
   // timeline
   const tm = times(); const items = [];
   for (const b of allBookings()) {
@@ -1129,7 +1146,8 @@ function renderChart() {
   const clash = new Set();
   inView.forEach(a => inView.forEach(b => { if (a.id < b.id && a.roomId === b.roomId && a.checkIn < b.checkOut && b.checkIn < a.checkOut) { clash.add(a.id); clash.add(b.id); } }));
   const rs = roomState(); let rows = '';
-  for (const [gk, gl] of [['single', 'ห้องเดี่ยว'], ['family', 'ห้อง Family · 2 ห้องนอน 2 ห้องน้ำ']]) {
+  const eqView = S.gMode === 'equip';
+  for (const [gk, gl] of eqView ? [] : [['single', 'ห้องเดี่ยว'], ['family', 'ห้อง Family · 2 ห้องนอน 2 ห้องน้ำ']]) {
     const list = activeRooms().filter(r => (r.type === 'family' ? 'family' : 'single') === gk); if (!list.length) continue;
     rows += `<div class="g-group">${gl} · ${list.length} ห้อง</div>`;
     for (const r of list) {
@@ -1147,10 +1165,12 @@ function renderChart() {
       rows += `<div class="g-row" data-room="${esc(r.id)}"><div class="g-rh" data-roomhead="${esc(r.id)}" title="${esc(roomLabel(r))}"><span class="no">${esc(r.no)}</span><span class="ty">${r.type === 'family' ? 'Family' : esc(r.bed || '')}</span><i class="hk ${hk}" title="${esc(HK[hk] || '')}"></i></div><div class="g-lane" data-start="${start}" style="width:${N * W}px">${bars}</div></div>`;
     }
   }
-  box.innerHTML = `<div class="g" style="width:calc(var(--roomw) + ${N * W}px)"><div class="g-head"><div class="g-corner">ห้อง</div><div class="g-days"><div class="g-months">${months}</div><div class="g-dayrow">${dayrow}</div></div></div><div class="g-body"><div class="g-cols">${colsOv}</div>${rows}</div></div>`;
+  if (eqView) rows += eqChartRows(start, end, N, W, q, hit);
+  box.innerHTML = `<div class="g" style="width:calc(var(--roomw) + ${N * W}px)"><div class="g-head"><div class="g-corner">${eqView ? 'ตัวที่' : 'ห้อง'}</div><div class="g-days"><div class="g-months">${months}</div><div class="g-dayrow">${dayrow}</div></div></div><div class="g-body"><div class="g-cols">${colsOv}</div>${rows}</div></div>`;
   box.scrollLeft = keepX; box.scrollTop = keepY;
+  if (S.gAnim) { const body = box.querySelector('.g-body'); if (body) body.classList.add(S.gAnim); S.gAnim = null; } // slide between rooms and extra beds
   renderChartLegend();
-  $('#gtRange').value = String(S.gRange || 1); $('#gtZoomVal').textContent = Math.round((S.gZoom || 1) * 100) + '%'; $('#gtUndo').disabled = !undoStack.length;
+  $$('#gView [data-gview]').forEach(x => x.setAttribute('aria-pressed', String((S.gMode || 'rooms') === x.dataset.gview))); $('#gtRange').value = String(S.gRange || 1); $('#gtZoomVal').textContent = Math.round((S.gZoom || 1) * 100) + '%'; $('#gtUndo').disabled = !undoStack.length;
   const sel = $('#gtChan'), chans = [...new Set(allBookings().map(b => b.channel).filter(Boolean))].sort();
   if (sel.dataset.k !== chans.join('|')) { sel.dataset.k = chans.join('|'); sel.innerHTML = '<option value="">ทุกช่องทาง</option>' + chans.map(c => `<option>${esc(c)}</option>`).join('') + '<option value="__none">ไม่ระบุช่องทาง</option>'; }
   sel.value = chf;
@@ -1184,7 +1204,7 @@ function stayMenu(b, x, y) {
   const d = S.day || todayStr(), here = b.checkIn <= d && d <= b.checkOut, x2 = dailyRows(d).find(r => r.b && r.b.id === b.id);
   const items = b.kind === 'block' ? [
     { label: 'แก้ไขการปิดห้อง', icon: 'note', run: () => openBooking(M.bookings.get(b.id) || b) },
-    { label: 'ยกเลิกปิดห้อง', icon: 'check', danger: true, run: async () => { if (await save(() => Store.del('bookings', b.id), `ยกเลิกปิดห้อง ${roomNo(b.roomId)}`)) logAct(`ยกเลิกปิดห้อง ${roomNo(b.roomId)} (ผังการจอง)`); } },
+    { label: 'ยกเลิกปิดห้อง', icon: 'check', danger: true, run: async () => { if (await save(() => Store.del('bookings', b.id), `ยกเลิกปิดห้อง ${roomNo(b.roomId)}`)) logAct(`ยกเลิกปิดห้อง ${roomNo(b.roomId)} (ตารางการจอง)`); } },
   ] : [
     { label: 'แก้ไขการจอง', icon: 'note', run: () => openBooking(M.bookings.get(b.id) || b) },
     { label: 'ดูรายละเอียดทั้งหมด', icon: 'users', run: () => { const r = dailyRows(here ? d : b.checkIn).find(r => r.b && r.b.id === b.id) || { r: roomById(b.roomId) || {}, b, o: {} }; openRoomSummary(r, here ? d : b.checkIn); } },
@@ -1208,6 +1228,9 @@ function exportChartXls() {
     .concat(list.map(b => [roomNo(b.roomId), b.kind === 'block' ? 'ปิดห้อง' : 'จอง', b.kind === 'block' ? b.reason : b.guest, b.checkIn, b.checkOut, nightsOf(b), b.channel || '', b.ref || '', STATUS[b.status] || '', +b.adults || '', +b.children || '', b.breakfast ? 'BF' : '', xbedOf(b) || '', cotOf(b) || '', String(b.notes || '').trim()]));
   const ws = XLSX.utils.aoa_to_sheet(rows); ws['!cols'] = [6, 8, 28, 11, 11, 5, 14, 14, 11, 6, 5, 8, 8, 8, 40].map(w => ({ wch: w }));
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Bookings');
+  const eqRows = [['ชนิด', 'ตัวที่', 'ห้อง', 'แขก', 'ตั้งแต่', 'ถึง', 'คืน']];
+  for (const [k, qq] of Object.entries(EQ)) eqUnits(k, ...eqWindow(start, end)).forEach((u, i) => u.filter(s => s.ci < end && s.co > start).forEach(s => eqRows.push([qq.en, i + 1, roomNo(s.b.roomId), s.b.guest, s.ci, s.co, diffDays(s.ci, s.co)])));
+  const ws2 = XLSX.utils.aoa_to_sheet(eqRows); ws2['!cols'] = [11, 6, 6, 28, 11, 11, 5].map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws2, 'Extra bed & Baby cot');
   const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
   downloadFile(`Booking_chart_${S.gMonth}${(+S.gRange || 1) > 1 ? '_' + S.gRange + 'm' : ''}.xlsx`, new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
 }
@@ -1302,11 +1325,40 @@ function bindChart() {
     if (c.length) { toast(`ห้อง ${roomNo(r.room)} ไม่ว่างช่วงนี้ (${c.map(x => x.kind === 'block' ? (x.reason || 'ปิดห้อง') : x.guest).join(', ')}) · ไม่ได้ย้าย`, 'err'); renderChart(); return; }
     const what = r.room !== b.roomId ? `ย้าย ${b.guest || b.reason} ไปห้อง ${roomNo(r.room)}` : `เปลี่ยนวัน ${b.guest || b.reason}`;
     const ok = await save(() => Store.merge('bookings', b.id, { checkIn: r.ci, checkOut: r.co, roomId: r.room, updatedAt: Date.now(), updatedBy: Store.me?.id }), `${what} · ${fmtShort(r.ci)} → ${fmtShort(r.co)}`);
-    if (ok) logAct(`${what} · ${fmtD(r.ci)} → ${fmtD(r.co)} (ลากในผังการจอง)`); else renderChart();
+    if (ok) logAct(`${what} · ${fmtD(r.ci)} → ${fmtD(r.co)} (ลากในตารางการจอง)`); else renderChart();
   });
   $('#gscroll').addEventListener('scroll', closePop, { passive: true });
 }
 const laneDay = (lane, clientX) => { const r = lane.getBoundingClientRect(); return addDays(lane.dataset.start, Math.max(0, Math.floor((clientX - r.left) / cw()))); };
+// one highlight element glides to the chosen item (menu, calendar day)
+function slideTo(ind, el) {
+  if (!ind) return; if (!el || !el.offsetParent) { ind.style.opacity = 0; return; }
+  const first = !ind.dataset.on; ind.dataset.on = 1;
+  if (first) ind.style.transition = 'none';
+  ind.style.opacity = 1; ind.style.width = el.offsetWidth + 'px'; ind.style.height = el.offsetHeight + 'px';
+  ind.style.transform = `translate(${el.offsetLeft}px,${el.offsetTop}px)`;
+  if (first) requestAnimationFrame(() => { ind.style.transition = ''; });
+}
+window.addEventListener('resize', () => { slideTo($('#nav .nav-ind'), $('#nav [aria-current="page"]')); slideTo($('.cal2-ind'), $('#calGrid button.cur')); });
+// gimmick: headline numbers spin through random digits, then settle left to right on the real value
+const ROLL_SEL = '.kpi b, .quick.svc .sv-v, .stat b, .side-card b, .cal2-day b, .hk-sum b';
+function rollNumbers(root) {
+  if (!root || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const nodes = [];
+  root.querySelectorAll(ROLL_SEL).forEach(el => { const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) if (/\d/.test(n.nodeValue)) nodes.push({ n, real: n.nodeValue }); });
+  if (!nodes.length) return;
+  const T = 900, t0 = performance.now();
+  const step = now => {
+    const p = Math.min(1, (now - t0) / T);
+    for (const x of nodes) {
+      if (!x.n.isConnected) continue; // re-rendered meanwhile: the new text is already right
+      const digits = [...x.real].filter(c => /\d/.test(c)).length; let k = 0;
+      x.n.nodeValue = p >= 1 ? x.real : [...x.real].map(c => /\d/.test(c) ? (k++ / digits < p * 1.15 - .15 ? c : String(Math.floor(Math.random() * 10))) : c).join('');
+    }
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 function closePop() { document.querySelectorAll('.pop').forEach(x => x.remove()); }
 function placePop(el, anchor) {
   document.body.appendChild(el);
@@ -1434,7 +1486,7 @@ function openRates(ym = todayStr().slice(0, 7)) {
   $m('#rtNext').onclick = () => { ym = ymAdd(ym, 1); draw(); };
   if (edit) $m('#rtSave').onclick = async () => {
     const cats = {}, extras = {}; m.el.querySelectorAll('.rt-ex').forEach(i => { extras[i.dataset.x] = +i.value || 0; }); m.el.querySelectorAll('.rt-in:not(.rt-ex)').forEach(i => { (cats[i.dataset.k] = cats[i.dataset.k] || {})[i.dataset.c] = +i.value || 0; });
-    if (await save(() => Store.put('settings', rateDocId(ym), { cats, extras, note: $m('#rtNote').value.trim(), updatedAt: Date.now() }), `บันทึกราคา ${ymLabel(ym)} แล้ว`)) { logAct(`แก้ไขราคาห้อง ${ymLabel(ym)}`); draw(); }
+    if (await save(() => Store.put('settings', rateDocId(ym), { ...(M.settings.get(rateDocId(ym)) || {}), cats, extras, note: $m('#rtNote').value.trim(), updatedAt: Date.now() }), `บันทึกราคา ${ymLabel(ym)} แล้ว`)) { logAct(`แก้ไขราคาห้อง ${ymLabel(ym)}`); draw(); }
   };
   draw();
 }
@@ -1927,7 +1979,7 @@ function bindDaily() {
   $('#copyTx').onclick = () => { const d = S.day, list = transfersOn(d); if (!list.length) return toast('ไม่มีรถรับส่งวันนี้');
     copyText(msgDoc(`รถรับส่ง · ${fmtLong(d)}`, `รวม ${list.length} เที่ยว`, list.map(({ b, t }, i) => msgItem(`${i + 1}) ${t.time || 'ยังไม่ระบุเวลา'} · ${TX_TYPES[t.type] || 'รถรับส่ง'}`, [
       `ห้อง ${roomNo(b.roomId)} · ${b.guest}${t.pax ? ` (${t.pax} คน)` : ''}`, `เส้นทาง: ${txLine(t)}`, t.flight && `เที่ยวบิน: ${t.flight}`,
-      t.driver && `คนขับ: ${t.driver}`, (t.plate || t.phone) && [t.plate && `ทะเบียน ${t.plate}`, t.phone && `โทร ${t.phone}`].filter(Boolean).join(' · '), `สถานะ: ${TX_STATUS[t.status || 'need']}`, t.note && `หมายเหตุ: ${t.note}`])))); };
+      t.driver && `คนขับ: ${t.driver}`, (t.plate || t.phone) && [t.plate && `ทะเบียน ${t.plate}`, t.phone && `โทร ${t.phone}`].filter(Boolean).join(' · '), `สถานะ: ${(TX_STATUS[txSt(t)] || 'ยกเลิก')}`, t.note && `หมายเหตุ: ${t.note}`])))); };
   $('#inHouseBtn').onclick = () => openInHouse(S.day);
   $('#copyBf').onclick = () => { const d = S.day, rows = dailyRows(d).filter(x => x.bf); if (!rows.length) return toast('ไม่มีอาหารเช้าวันนี้');
     copyText(msgDoc(`อาหารเช้า · ${fmtLong(d)}`, `รวม ${rows.reduce((s, x) => s + x.pax, 0)} ท่าน · ${rows.length} ห้อง`, rows.map(x => { const s = svcOf(x.bfB || x.b).bf || {};
@@ -2081,13 +2133,14 @@ function bdayRow(x, showStayHint) {
 }
 function renderServices() {
   const el = $('#dSvc'); if (!el) return;
-  const t = todayStr(), bf = dailyRows(t).filter(x => x.bf), tx = transfersOn(t), ih = inHouseData(t);
+  { const h = $('#dSvcTitle'); if (h) h.textContent = dashDay() === todayStr() ? 'บริการวันนี้' : 'บริการวันที่ ' + fmtShort(dashDay()); }
+  const t = dashDay(), DT = t === todayStr() ? 'วันนี้' : ' ' + fmtShort(t), MT = t === todayStr() ? 'เช้านี้' : ' ' + fmtShort(t), bf = dailyRows(t).filter(x => x.bf), tx = transfersOn(t), ih = inHouseData(t);
   const rate = ratesFor(t.slice(0, 7)).data, dbl = rate && rate.cats && rate.cats.double ? +rate.cats.double.night || 0 : 0;
   const up = upcomingBirthdays().length, xb = eqOnNight('xbed', t), cb = eqOnNight('cot', t);
   const tile = (q, ic, label, val, sub, cls = '') => `<button data-q="${q}" class="${cls}"><span class="qi">${icon(ic)}</span><span class="sv-l">${label}</span><b class="sv-v">${val}</b><small>${sub}</small></button>`;
   el.innerHTML = [
-    tile('daily', 'coffee', 'อาหารเช้าเช้านี้', bf.reduce((s, x) => s + x.pax, 0) + ' <i class="u">ท่าน</i>', bf.length + ' ห้อง'),
-    tile('taxi', 'car', 'รถรับส่งวันนี้', tx.length + ' <i class="u">เที่ยว</i>', tx.length ? `${tx.filter(x => x.t.status === 'need').length} ยังไม่ได้จองรถ` : 'ไม่มี', tx.some(x => x.t.status === 'need') ? 'warn' : ''),
+    tile('daily', 'coffee', 'อาหารเช้า' + MT, bf.reduce((s, x) => s + x.pax, 0) + ' <i class="u">ท่าน</i>', bf.length + ' ห้อง'),
+    tile('taxi', 'car', 'รถรับส่ง' + DT, tx.length + ' <i class="u">เที่ยว</i>', tx.length ? `${tx.filter(x => txSt(x.t) === 'need').length} ยังไม่ได้จองรถ` : 'ไม่มี', tx.some(x => txSt(x.t) === 'need') ? 'warn' : ''),
     tile('equip', 'bed', 'เตียงเสริม / เปล', `${xb} <i class="u">/</i> ${cb}`, `จาก ${EQ.xbed.stock()} / ${EQ.cot.stock()} ตัว`),
     tile('inhouse', 'print', 'In House Report', ih.inHouse + ' <i class="u">ห้อง</i>', ih.pax + ' ท่าน'),
     tile('rates', 'tag', 'ราคาเดือนนี้', dbl ? money(dbl) : '—', dbl ? 'Double ต่อคืน' : 'ยังไม่ได้ตั้งราคา'),
@@ -2098,7 +2151,7 @@ function renderServices() {
 function renderBirthdayBadge() { const b = $('#bdayBadge'); if (!b) return; const n = upcomingBirthdays().length; b.hidden = !n; b.textContent = n; $('#bdayBtn').classList.toggle('has', !!n); }
 function renderEquipCard() {
   const el = $('#dEquip'); if (!el) return;
-  const t = todayStr(), wk = addDays(t, 7);
+  const t = dashDay(), wk = addDays(t, 7);
   const box = Object.entries(EQ).map(([k, q]) => { const n = eqOnNight(k, t), s = q.stock();
     return `<div class="eq-mini${n > s ? ' over' : ''}"><span>${q.label}คืนนี้</span><b>${n} <small>/ ${s}</small></b><div class="meter"><i style="width:${s ? Math.min(100, n / s * 100) : 0}%"></i></div></div>`; }).join('');
   const soon = allBookings().filter(b => isActive(b) && (xbedOf(b) || cotOf(b)) && b.checkIn >= t && b.checkIn <= wk).sort((a, b) => a.checkIn < b.checkIn ? -1 : 1);
@@ -2530,7 +2583,7 @@ function openRoomSummary(x, day) {
       ${sec('coffee', `อาหารเช้า${x.bf ? ' · <em class="rs-on">ทานวันนี้</em>' : (x.bfB || b).breakfast ? '' : ' · <em>ไม่รวมอาหารเช้า</em>'}`, kv('อาหาร', list(bf.diet)) + kv('แพ้อาหาร', list(bf.allergy)) + kv('หมายเหตุถึงครัว', esc(bf.note || '')))}
       ${sec('sparkle', `ทำความสะอาด${o.clean ? ' · <em class="rs-on">ทำแล้ววันนี้</em>' : ''}`, kv('ความถี่', esc(cl.freq || '')) + kv('ช่วงเวลา', cl.time && cl.time !== 'ไม่ระบุ' ? esc(cl.time) : '') + kv('แพ้ / ห้ามใช้', list(cl.allergy)) + kv('เปลี่ยนผ้า', esc(cl.linen || '')) + kv('ขอเพิ่มเติม', list(cl.extra)) + kv('หมายเหตุถึงแม่บ้าน', esc(cl.note || '')))}
       ${sec('shirt', `ส่งผ้าซัก${o.laundry ? ' · <em class="rs-on">ส่งวันนี้</em>' : ''}`, o.laundry || li.shop ? kv('ร้าน', esc([li.shop, li.tel].filter(Boolean).join(' · '))) + kv('บริการ', esc((li.service || '') + (li.urgent ? ' · ด่วน (ภายในวัน)' : ''))) + kv('จำนวน', esc(li.qty || '')) + kv('นัดรับคืน', li.back ? fmtD(li.back) : '') + kv('สถานะ', li.status ? esc(SVC.lStatus[li.status]) : '') + kv('หมายเหตุ', esc(li.note || '')) : '', 'ไม่ได้ส่งผ้าซัก')}
-      ${sec('car', 'รถรับส่ง', tx.map(t => `<div class="rs-kv"><span>${esc(fmtShort(t.date))} ${esc(t.time || '')}</span><b>${esc(TX_TYPES[t.type] || '')} · ${esc(txLine(t))}${t.flight ? ' · ✈ ' + esc(t.flight) : ''}${t.pax ? ' · ' + t.pax + ' คน' : ''} · ${esc(TX_STATUS[t.status || 'need'])}${t.driver || t.plate || t.phone ? `<br><small>${esc([t.driver, t.plate, t.phone].filter(Boolean).join(' · '))}</small>` : ''}</b></div>`).join(''), 'ไม่มีรถรับส่ง')}
+      ${sec('car', 'รถรับส่ง', tx.map(t => `<div class="rs-kv"><span>${esc(fmtShort(t.date))} ${esc(t.time || '')}</span><b>${esc(TX_TYPES[t.type] || '')} · ${esc(txLine(t))}${t.flight ? ' · ✈ ' + esc(t.flight) : ''}${t.pax ? ' · ' + t.pax + ' คน' : ''} · ${esc((TX_STATUS[txSt(t)] || 'ยกเลิก'))}${t.driver || t.plate || t.phone ? `<br><small>${esc([t.driver, t.plate, t.phone].filter(Boolean).join(' · '))}</small>` : ''}</b></div>`).join(''), 'ไม่มีรถรับส่ง')}
       ${sec('note', 'หมายเหตุ', kv(`วันนี้ (${esc(fmtShort(day))})`, esc(o.note || '')) + kv('การจอง', (() => { const n = String(b.notes || '').trim(); return n && normName(n) !== normName(b.guest) ? esc(n) : ''; })()))}
       ${fin ? sec('chart', 'การชำระเงิน', (discOf(b) ? kv('ส่วนลด', '−฿' + money(discOf(b)) + (b.discNote ? ' · ' + esc(b.discNote) : '')) : '') + kv('ยอดที่ต้องเก็บ', '฿' + money(capOf(b))) + kv('รับแล้ว', '฿' + money(+b.paid || 0) + (b.payMethod ? ' · ' + esc(b.payMethod) : '')) + kv('คงค้าง', balanceOf(b) > 0 ? `<span class="owe">฿${money(balanceOf(b))}</span>` : 'ครบแล้ว ✓') + (+b.deposit ? kv('มัดจำ', '฿' + money(+b.deposit) + (depRefOf(b) ? ' · ' + esc(DEP_ST[depRefOf(b).st]) : ' · ยังไม่คืน')) : '')) : ''}
     </div>
@@ -2560,9 +2613,9 @@ function openTxEditor(b) {
 function openTaxiDetail(b) {
   const list = txOf(b);
   const m = openModal(`<div class="sheet narrow" style="width:min(620px,100%)"><div class="sheet-h"><div><h2>${icon('car')} รถรับส่ง · ห้อง ${esc(roomNo(b.roomId))}</h2><div class="hint">${esc(b.guest)} · ${esc(fmtD(b.checkIn))} → ${esc(fmtD(b.checkOut))}</div></div><div class="spacer"></div><button class="btn ghost" data-close>✕</button></div>
-    <div class="sheet-b">${list.length ? `<div class="tx-day">${list.map(t => `<div class="tx-item st-${esc(t.status || 'need')}"><div class="tx-time"><b>${esc(fmtShort(t.date))} ${esc(t.time || '')}</b></div>
+    <div class="sheet-b">${list.length ? `<div class="tx-day">${list.map(t => `<div class="tx-item st-${txSt(t)}"><div class="tx-time"><b>${esc(fmtShort(t.date))} ${esc(t.time || '')}</b></div>
       <div class="tx-main"><b>${t.type === 'pickup' ? 'รับเข้าโรงแรม' : t.type === 'dropoff' ? 'ส่งออกจากโรงแรม' : 'อื่นๆ'}</b><span>${esc(txLine(t))}${t.flight ? ' · ✈ ' + esc(t.flight) : ''}${t.pax ? ' · ' + t.pax + ' คน' : ''}</span>${t.driver || t.plate || t.phone ? `<span class="tx-drv">${esc([t.driver, t.plate, t.phone].filter(Boolean).join(' · '))}</span>` : ''}</div>
-      <select class="tx-st" data-tid="${esc(t.id)}">${Object.entries(TX_STATUS).map(([k, l]) => `<option value="${k}"${k === (t.status || 'need') ? ' selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')}</div>` : '<div class="empty">ยังไม่ได้จองรถให้แขกคนนี้</div>'}</div>
+      <select class="tx-st" data-tid="${esc(t.id)}">${Object.entries(TX_STATUS).map(([k, l]) => `<option value="${k}"${k === txSt(t) ? ' selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')}</div>` : '<div class="empty">ยังไม่ได้จองรถให้แขกคนนี้</div>'}</div>
     <div class="sheet-f"><div class="spacer"></div><button class="btn" data-close>ปิด</button><button class="btn primary" id="txEdit">${icon('plus')} เพิ่ม / แก้ไขรถ</button></div></div>`);
   m.el.addEventListener('change', e => { const s = e.target.closest('.tx-st'); if (s) setTxStatus(b.id, s.dataset.tid, s.value); });
   m.el.querySelector('#txEdit').onclick = () => { m.close(); openTxEditor(M.bookings.get(b.id) || b); };
@@ -2574,7 +2627,7 @@ const txFrom = t => t.from != null ? t.from : t.type === 'pickup' ? (t.place || 
 const txTo = t => t.to != null ? t.to : t.type === 'pickup' ? TX_HOTEL : t.type === 'dropoff' ? (t.place || '') : '';
 const txRowInner = t => { const nm = 'txt_' + (t.id || Math.random().toString(36).slice(2)); return `
       <div class="tx-top"><div class="seg tx-seg">${Object.entries(TX_TYPES).map(([k, l]) => `<label><input type="radio" name="${nm}" data-k="type" value="${k}"${k === (t.type || 'pickup') ? ' checked' : ''}><span>${k === 'pickup' ? '↘ ' : k === 'dropoff' ? '↗ ' : ''}${l}</span></label>`).join('')}</div>
-        <select data-k="status" class="tx-status">${Object.entries(TX_STATUS).map(([k, l]) => `<option value="${k}"${k === (t.status || 'need') ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        <select data-k="status" class="tx-status">${Object.entries(TX_STATUS).map(([k, l]) => `<option value="${k}"${k === txSt(t) ? ' selected' : ''}>${l}</option>`).join('')}</select>
         <button type="button" class="iconbtn" data-deltx title="ลบเที่ยวนี้">✕</button></div>
       <div class="tx-route"><label class="f"><span>รับที่</span><input type="text" data-k="from" value="${esc(txFrom(t))}" list="txPlaces" placeholder="จุดรับ"></label>
         <span class="tx-arrow">→</span><label class="f"><span>ส่งที่</span><input type="text" data-k="to" value="${esc(txTo(t))}" list="txPlaces" placeholder="จุดส่ง"></label>
@@ -2604,7 +2657,9 @@ function txBind(box) {
 }
 const txNew = (ty, date, pax, eta) => ({ id: Store.newId(), type: ty, date, time: ty === 'pickup' ? (eta || '') : '', from: ty === 'pickup' ? TX_PLACES[0] : ty === 'dropoff' ? TX_HOTEL : '', to: ty === 'pickup' ? TX_HOTEL : ty === 'dropoff' ? TX_PLACES[0] : '', pax, status: 'need' });
 const TX_TYPES = { pickup: 'รับเข้าโรงแรม', dropoff: 'ส่งออกจากโรงแรม', other: 'อื่นๆ' };
-const TX_STATUS = { need: 'ยังไม่ได้จองรถ', booked: 'จองรถแล้ว', done: 'เสร็จแล้ว', cancelled: 'ยกเลิก' };
+// two states only, so reception never has to guess: not booked yet / done (an older "booked" counts as done)
+const TX_STATUS = { need: 'ยังไม่จอง', done: 'เสร็จแล้ว' };
+const txSt = t => !t || !t.status || t.status === 'need' ? 'need' : t.status === 'cancelled' ? 'cancelled' : 'done';
 const TX_PLACES = ['สนามบินภูเก็ต (HKT)', 'ท่าเรือรัษฎา', 'ตัวเมืองภูเก็ต', 'ป่าตอง', 'สนามบินกระบี่ (KBV)'];
 const txOf = b => (b && b.kind !== 'block' && Array.isArray(b.transfers)) ? b.transfers : [];
 function transfersOn(d) {
@@ -2616,7 +2671,7 @@ const txLine = t => `${txFrom(t) || '—'} → ${txTo(t) || '—'}`;
 async function setTxStatus(bid, tid, status) {
   const b = M.bookings.get(bid); if (!b) return;
   const list = txOf(b).map(t => t.id === tid ? { ...t, status } : t);
-  if (await save(() => Store.merge('bookings', bid, { transfers: list }), `อัปเดตรถ: ${TX_STATUS[status]}`)) logAct(`รถรับส่ง ${b.guest}: ${TX_STATUS[status]}`);
+  if (await save(() => Store.merge('bookings', bid, { transfers: list }), `อัปเดตรถ: ${TX_STATUS[status] || status}`)) logAct(`รถรับส่ง ${b.guest}: ${TX_STATUS[status] || status}`);
 }
 // where the ride list stands against the Excel sheet, so a sync that never ran or failed is visible
 function xsTxStatus() {
@@ -2629,12 +2684,12 @@ function xsTxStatus() {
 function renderTaxiCard(d) {
   const list = transfersOn(d), el = $('#txList'); if (!el) return;
   const next = []; for (let i = 1; i <= 7; i++) { const dd = addDays(d, i); for (const x of transfersOn(dd)) next.push({ ...x, d: dd }); }
-  const soon = next.length ? `<div class="tx-soon"><h4>ใน 7 วันข้างหน้า · ${next.length} เที่ยว</h4>${next.map(({ b, t, d: dd }) => `<div class="tx-soon-row" data-id="${esc(b.id)}"><span class="mono">${fmtShort(dd)} ${esc(t.time || '')}</span><span class="pill ${t.type === 'pickup' ? 'p-confirmed' : 'p-tentative'}">${t.type === 'pickup' ? 'รับ' : t.type === 'dropoff' ? 'ส่ง' : 'อื่นๆ'}</span><b>ห้อง ${esc(roomNo(b.roomId))} · ${esc(b.guest)}</b><span class="muted">${esc(txLine(t))}${t.flight ? ' · ✈ ' + esc(t.flight) : ''}${t.pax ? ' · ' + t.pax + ' คน' : ''}</span><span class="muted">${esc(TX_STATUS[t.status || 'need'])}</span></div>`).join('')}</div>` : '';
-  $('#txCount').textContent = list.length ? `${list.length} เที่ยว · ยังไม่ได้จองรถ ${list.filter(x => x.t.status === 'need').length}` : '';
-  el.innerHTML = list.length ? list.map(({ b, t }) => `<div class="tx-item st-${esc(t.status || 'need')}" data-id="${esc(b.id)}">
+  const soon = next.length ? `<div class="tx-soon"><h4>ใน 7 วันข้างหน้า · ${next.length} เที่ยว</h4>${next.map(({ b, t, d: dd }) => `<div class="tx-soon-row" data-id="${esc(b.id)}"><span class="mono">${fmtShort(dd)} ${esc(t.time || '')}</span><span class="pill ${t.type === 'pickup' ? 'p-confirmed' : 'p-tentative'}">${t.type === 'pickup' ? 'รับ' : t.type === 'dropoff' ? 'ส่ง' : 'อื่นๆ'}</span><b>ห้อง ${esc(roomNo(b.roomId))} · ${esc(b.guest)}</b><span class="muted">${esc(txLine(t))}${t.flight ? ' · ✈ ' + esc(t.flight) : ''}${t.pax ? ' · ' + t.pax + ' คน' : ''}</span><span class="muted">${esc((TX_STATUS[txSt(t)] || 'ยกเลิก'))}</span></div>`).join('')}</div>` : '';
+  $('#txCount').textContent = list.length ? `${list.length} เที่ยว · ยังไม่จอง ${list.filter(x => txSt(x.t) === 'need').length}` : '';
+  el.innerHTML = list.length ? list.map(({ b, t }) => `<div class="tx-item st-${txSt(t)}" data-id="${esc(b.id)}">
       <div class="tx-time"><b>${esc(t.time || '—')}</b><span class="pill ${t.type === 'pickup' ? 'p-confirmed' : t.type === 'dropoff' ? 'p-tentative' : 'p-checked_out'}">${t.type === 'pickup' ? 'รับ' : t.type === 'dropoff' ? 'ส่ง' : 'อื่นๆ'}</span></div>
       <div class="tx-main"><b>ห้อง ${esc(roomNo(b.roomId))} · ${esc(b.guest)}</b><span>${esc(txLine(t))}${t.flight ? ' · ✈ ' + esc(t.flight) : ''}${t.pax ? ' · ' + t.pax + ' คน' : ''}</span>${t.driver || t.plate || t.phone ? `<span class="tx-drv">${icon('car')} ${esc([t.driver, t.plate].filter(Boolean).join(' · ') || 'คนขับ')}${t.phone ? ` · <a href="tel:${esc(t.phone)}">${esc(t.phone)}</a>` : ''}</span>` : ''}${t.note ? `<span>${esc(t.note)}</span>` : ''}</div>
-      <select class="tx-st" data-bid="${esc(b.id)}" data-tid="${esc(t.id)}">${Object.entries(TX_STATUS).map(([k, l]) => `<option value="${k}"${k === (t.status || 'need') ? ' selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')
+      <select class="tx-st" data-bid="${esc(b.id)}" data-tid="${esc(t.id)}">${Object.entries(TX_STATUS).map(([k, l]) => `<option value="${k}"${k === txSt(t) ? ' selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')
     : '<div class="empty">ไม่มีรถรับส่งวันนี้</div>';
   el.innerHTML += soon + (isAdmin() ? xsTxStatus() : '');
 }
@@ -2874,12 +2929,11 @@ const EQ = {
   xbed: { label: 'เตียงเสริม', en: 'Extra Bed', of: xbedOf, stock: () => Math.max(0, +(settings().extraBedStock ?? 6) || 0), cls: 's-confirmed' },
   cot: { label: 'เปลเด็ก', en: 'Baby Cot', of: cotOf, stock: () => Math.max(0, +(settings().babyCotStock ?? 3) || 0), cls: 's-cot' },
 };
-const eqUsers = (kind, ci, co, exceptId) => allBookings().filter(b => isActive(b) && b.id !== exceptId && EQ[kind].of(b) > 0 && b.checkIn < co && b.checkOut > ci);
-const eqOnNight = (kind, d, list) => (list || eqUsers(kind, d, addDays(d, 1))).reduce((s, b) => s + (b.checkIn <= d && d < b.checkOut ? EQ[kind].of(b) : 0), 0);
+const eqOnNight = (kind, d, list) => (list || eqSpans(kind, d, addDays(d, 1))).reduce((s, x) => s + (x.ci <= d && d < x.co ? 1 : 0), 0);
 // highest number in use on any night of [ci, co)
 function equipPeak(kind, ci, co, exceptId) {
   if (!validD(ci) || !validD(co) || co <= ci) return 0;
-  const list = eqUsers(kind, ci, co, exceptId); let peak = 0;
+  const list = eqSpans(kind, ci, co, exceptId); let peak = 0;
   for (let d = ci, i = 0; d < co && i < 400; d = addDays(d, 1), i++) peak = Math.max(peak, eqOnNight(kind, d, list));
   return peak;
 }
@@ -2890,72 +2944,6 @@ function equipHint(o, exceptId) {
     return !free ? `<span class="owe">ไม่มี${q.label}ว่างช่วงนี้</span>` : want > free ? `<span class="owe">${q.label}: ต้องการ ${want} แต่ว่างแค่ ${free} จาก ${stock} ในบางคืน</span>` : `${q.label}ว่าง ${free} จาก ${stock}${want < free ? ` · เพิ่มได้อีก ${free - want}` : ' · ใช้ครบแล้ว'}`;
   }).join(' · ') + ' (ตลอดช่วงวันที่นี้)' + (() => { const ex = (ratesFor(o.checkIn.slice(0, 7)).data || {}).extras || {}; const p = [ex.xbed ? `เตียงเสริม ${money(ex.xbed)}` : '', ex.cot ? `เปล ${money(ex.cot)}` : ''].filter(Boolean); return p.length ? ` · ราคา ${p.join(', ')} บาท/คืน` : ''; })();
 }
-// give every booking its own unit numbers (#1, #2, …) so the chart reads like the old Excel sheet
-function assignUnits(kind, from, to) {
-  const q = EQ[kind], list = eqUsers(kind, from, to).sort((a, b) => a.checkIn < b.checkIn ? -1 : a.checkIn > b.checkIn ? 1 : String(a.id) < String(b.id) ? -1 : 1);
-  const units = [];
-  for (const b of list) {
-    let need = q.of(b);
-    for (let i = 0; need > 0; i++) {
-      if (!units[i]) units[i] = [];
-      if (units[i].every(x => x.checkOut <= b.checkIn || x.checkIn >= b.checkOut)) { units[i].push(b); need--; }
-    }
-  }
-  return units;
-}
-function renderEquip() {
-  if (!S.eqMonth) S.eqMonth = todayStr().slice(0, 7);
-  const box = $('#eqScroll'), start = S.eqMonth + '-01', ms = parseD(start); ms.setUTCMonth(ms.getUTCMonth() + 1);
-  const end = toStr(ms), N = diffDays(start, end), t = todayStr();
-  $('#eqMonthLabel').textContent = ymLabel(S.eqMonth);
-  const roomW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--roomw')) || 104;
-  const W = Math.max(34, Math.floor((box.clientWidth - roomW - 4) / N));
-  box.style.setProperty('--cw', W + 'px');
-  const days = Array.from({ length: N }, (_, i) => addDays(start, i));
-  let dayrow = '', colsOv = '';
-  days.forEach((d, k) => { const dow = parseD(d).getUTCDay(), we = dow === 0 || dow === 6, td = d === t;
-    dayrow += `<div class="g-day${we ? ' we' : ''}${td ? ' td' : ''}" title="${fmtLong(d)}"><b>${parseD(d).getUTCDate()}</b>${DOW[dow]}</div>`;
-    if (we || td) colsOv += `<div class="${td ? 'td' : 'we'}" style="left:${k * W}px"></div>`; });
-  let rows = '', stats = '';
-  for (const [k, q] of Object.entries(EQ)) {
-    const stock = q.stock(), units = assignUnits(k, addDays(start, -62), end);
-    const nRows = Math.max(stock, units.length);
-    let overNights = 0, peak = 0;
-    for (const d of days) { const n = eqOnNight(k, d); peak = Math.max(peak, n); if (n > stock) overNights++; }
-    const tonight = eqOnNight(k, t);
-    stats += `<div class="stat"><span>${q.label}ที่ใช้คืนนี้</span><b>${tonight} / ${stock}</b><small>${tonight > stock ? '<span class="owe">เกินจำนวนที่มี</span>' : `ว่าง ${stock - tonight} ตัว`}</small></div>
-      <div class="stat"><span>${q.label} · สูงสุดในเดือนนี้</span><b>${peak}</b><small>${overNights ? `<span class="owe">เกิน ${overNights} คืน</span>` : 'ไม่เกินจำนวนที่มี'}</small></div>`;
-    rows += `<div class="g-group">${q.label} (${q.en}) · มี ${stock} ตัว</div>`;
-    if (!nRows) rows += `<div class="g-row"><div class="g-rh"><span class="ty">—</span></div><div class="g-lane" style="width:${N * W}px"><span class="hint" style="padding:8px">ยังไม่ได้ตั้งจำนวนที่ตั้งค่า</span></div></div>`;
-    for (let i = 0; i < nRows; i++) {
-      const over = i >= stock; let bars = '';
-      for (const b of (units[i] || []).filter(b => b.checkIn < end && b.checkOut > start)) {
-        const s = b.checkIn < start ? start : b.checkIn, e = b.checkOut > end ? end : b.checkOut;
-        const left = diffDays(start, s) * W + (b.checkIn >= start ? W / 2 : 0), right = diffDays(start, e) * W + (b.checkOut <= end ? W / 2 : 0);
-        const bw = Math.max(14, right - left - 3), label = `${b.guest} · ห้อง ${roomNo(b.roomId)}`;
-        bars += `<div class="bk ${over ? 's-over' : q.cls}" data-id="${esc(b.id)}" style="left:${left + 1}px;width:${bw}px" title="${esc(`${label} · ${fmtD(b.checkIn)} → ${fmtD(b.checkOut)} · ${q.label} ${q.of(b)}`)}"><span class="nm">${esc(label)}</span></div>`;
-      }
-      rows += `<div class="g-row${over ? ' over' : ''}"><div class="g-rh"><span class="no">#${i + 1}</span><span class="ty">${over ? 'เกิน' : esc(q.en)}</span></div><div class="g-lane" style="width:${N * W}px">${bars}</div></div>`;
-    }
-  }
-  $('#eqStats').innerHTML = stats;
-  box.innerHTML = `<div class="g" style="width:calc(var(--roomw) + ${N * W}px)"><div class="g-head"><div class="g-corner">ตัวที่</div><div class="g-days"><div class="g-months"><div class="g-month" style="width:${N * W}px">${ymLabel(S.eqMonth)}</div></div><div class="g-dayrow">${dayrow}</div></div></div><div class="g-body"><div class="g-cols">${colsOv}</div>${rows}</div></div>`;
-  const list = allBookings().filter(b => isActive(b) && (xbedOf(b) || cotOf(b)) && b.checkIn < end && b.checkOut > start).sort((a, b) => a.checkIn < b.checkIn ? -1 : 1);
-  $('#eqCount').textContent = list.length ? `${list.length} การจอง` : '';
-  $('#eqList').innerHTML = list.length ? `<table><thead><tr><th>ห้อง</th><th>แขก</th><th>เข้า</th><th>ออก</th><th class="r">เตียงเสริม</th><th class="r">เปลเด็ก</th></tr></thead><tbody>${list.map(b => `<tr class="click" data-id="${esc(b.id)}"><td class="rn">${esc(roomNo(b.roomId))}</td><td>${esc(b.guest)}</td><td class="num">${fmtD(b.checkIn)}</td><td class="num">${fmtD(b.checkOut)}</td><td class="r num">${xbedOf(b) || '—'}</td><td class="r num">${cotOf(b) || '—'}</td></tr>`).join('')}</tbody></table>`
-    : '<div class="empty">เดือนนี้ยังไม่มีการจองที่ใช้เตียงเสริมหรือเปลเด็ก · ใส่จำนวนได้ในหน้าการจอง</div>';
-}
-function bindEquip() {
-  const go = n => { S.eqMonth = ymAdd(S.eqMonth || todayStr().slice(0, 7), n); renderEquip(); };
-  $('#eqPrev').onclick = () => go(-1); $('#eqNext').onclick = () => go(1); $('#eqToday').onclick = () => { S.eqMonth = todayStr().slice(0, 7); renderEquip(); };
-  $('#eqScroll').addEventListener('click', e => { const bar = e.target.closest('.bk'); if (bar) { e.stopPropagation(); showStayCard(bar); } });
-  $('#eqScroll').addEventListener('scroll', closePop, { passive: true });
-  $('#eqList').addEventListener('click', e => { const tr = e.target.closest('tr[data-id]'); if (tr) { const b = M.bookings.get(tr.dataset.id); if (b) openBooking(b); } });
-  let tm = null; window.addEventListener('resize', () => { clearTimeout(tm); tm = setTimeout(() => { if (S.page === 'equip') renderEquip(); }, 150); });
-  $('#eqImportBtn').onclick = () => $('#eqFile').click();
-  $('#eqFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importEquipExcel(f); };
-}
-
 /* ----- import the old "Booking Extra bed & Baby cot" workbook ----- */
 const EQ_MON = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 function parseEquipBook(wb) {
@@ -3013,7 +3001,7 @@ function matchEquip(entries) {
       }
       if (bestS >= 2) break;
     }
-    if (best && bestS >= 2) { const k = best.id; if (!res.has(k)) res.set(k, { b: best, xbed: new Set(), cot: new Set() }); res.get(k)[e.kind].add(e.unit); }
+    if (best && bestS >= 2) { const k = best.id; if (!res.has(k)) res.set(k, { b: best, xbed: new Set(), cot: new Set() }); res.get(k)[e.kind].add(e.unit); e.bid = k; }
     else miss.push(e);
   }
   return { res, miss };
@@ -3296,8 +3284,8 @@ function xsTransfers(XLSX, wb) {
   for (const sn of wb.SheetNames) {
     const ws = wb.Sheets[sn]; if (!ws || !ws['!ref']) continue;
     const R = XLSX.utils.decode_range(ws['!ref']), val = (r, c) => { const x = ws[XLSX.utils.encode_cell({ r, c })]; return x ? x.v : undefined; };
-    for (let r = R.s.r; r <= R.e.r; r++) for (let c = R.s.c; c <= R.e.c; c++) {
-      const t = val(r, c); if (typeof t !== 'string' || !/airport\s*transfer.*schedule/i.test(t)) continue;
+    const titles = []; for (const key in ws) { if (key[0] === '!') continue; const x = ws[key]; if (x && typeof x.v === 'string' && /airport\s*transfer.*schedule/i.test(x.v)) titles.push(XLSX.utils.decode_cell(key)); }
+    for (const { r, c } of titles) {
       // header row: Date · Guest name · Pax · Flight details · Landing time · Departure time
       let hr = -1, heads = [];
       for (let rr = r + 1; rr <= Math.min(r + 3, R.e.r) && hr < 0; rr++) {
@@ -3342,13 +3330,13 @@ function xsMatchTx(t) {
 }
 // rides from the sheet: the sheet decides date, time, flight, pax and type; driver, plate and status stay as set in the app
 function xsTxPlan(list) {
-  const rows = new Map(), unmatched = [], seenIds = new Set();
+  const rows = new Map(), unmatched = [], seenIds = new Set(), owner = new Map();
   let added = 0, changed = 0, removed = 0;
   const months = new Set(list.map(t => t.date.slice(0, 7)));
   const work = id => { if (!rows.has(id)) { const b = M.bookings.get(id); rows.set(id, { ...b, transfers: [...txOf(b)] }); } return rows.get(id); };
   for (const t of list) {
     const m = xsMatchTx(t); if (!m) { unmatched.push(t); continue; }
-    const tid = 'xt' + xsHash(m.type + '|' + t.date + '|' + xsTok(t.guest).join(' ')), d = work(m.b.id); seenIds.add(tid);
+    const tid = 'xt' + xsHash(m.type + '|' + t.date + '|' + xsTok(t.guest).join(' ')), d = work(m.b.id); seenIds.add(tid); owner.set(tid, m.b.id);
     const time = m.type === 'pickup' ? (t.land || t.dep) : (t.dep || t.land);
     const old = d.transfers.find(x => x.id === tid);
     const fromSheet = { type: m.type, date: t.date, time, pax: t.pax || (m.b.adults || 0) + (m.b.children || 0), flight: t.flight, xnote: t.note };
@@ -3358,12 +3346,13 @@ function xsTxPlan(list) {
     } else {
       const nx = { ...old, ...fromSheet };
       if (old.xnote !== undefined && (old.note || '') !== (old.xnote || '') && t.note === old.xnote) nx.note = old.note; else nx.note = t.note; // keep a note rewritten in the app
-      if (t.done && (old.status === 'need' || old.status === 'booked')) nx.status = 'done';
+      if (t.done && txSt(old) === 'need') nx.status = 'done';
       if (JSON.stringify(nx) !== JSON.stringify(old)) { d.transfers[d.transfers.indexOf(old)] = nx; changed++; }
     }
   }
   // rides that were taken off the sheet (only in months the sheet still lists, and not already driven)
-  for (const b of M.bookings.values()) for (const x of txOf(b)) if (x.src === 'excel' && !seenIds.has(x.id) && months.has(String(x.date).slice(0, 7)) && x.status !== 'done') {
+  for (const b of M.bookings.values()) for (const x of txOf(b)) if (x.src === 'excel' && owner.has(x.id) && owner.get(x.id) !== b.id) { const d = work(b.id); d.transfers = d.transfers.filter(y => y.id !== x.id); removed++; }
+  for (const b of M.bookings.values()) for (const x of txOf(b)) if (x.src === 'excel' && !seenIds.has(x.id) && months.has(String(x.date).slice(0, 7)) && txSt(x) !== 'done') {
     const d = work(b.id); d.transfers = d.transfers.filter(y => y.id !== x.id); removed++;
   }
   for (const [id, d] of rows) if (JSON.stringify(d.transfers) === JSON.stringify(txOf(M.bookings.get(id)))) rows.delete(id);
@@ -3371,7 +3360,8 @@ function xsTxPlan(list) {
 }
 async function xsApply(plan, opts = {}) {
   const rows = [];
-  for (const x of plan.add) { const id = x.xid; rows.push({ col: 'bookings', id, data: xsDoc(null, x.xid, x.it, x.v) }); if (x.it.kind === 'booking' && (x.it.rate || XP.redact(x.it.notes) !== String(x.it.notes).trim())) rows.push({ col: 'finance', id, data: { rate: x.it.rate || 0, paid: 0, srcNote: x.it.notes } }); }
+  const taken = new Set(M.bookings.keys());
+  for (const x of plan.add) { let id = x.xid; while (taken.has(id)) id = x.xid + '_' + Store.newId().slice(0, 6); taken.add(id); rows.push({ col: 'bookings', id, data: xsDoc(null, x.xid, x.it, x.v) }); if (x.it.kind === 'booking' && (x.it.rate || XP.redact(x.it.notes) !== String(x.it.notes).trim())) rows.push({ col: 'finance', id, data: { rate: x.it.rate || 0, paid: 0, srcNote: x.it.notes } }); }
   for (const x of plan.update.filter(x => x.quiet)) rows.push({ col: 'bookings', id: x.b.id, data: { ...x.b, src: 'excel', xid: x.xid, xsig: xsSig(x.it), xbase: x.keepBase && x.b.xbase ? x.b.xbase : { ...x.sheet }, xnotes: x.b.xnotes ?? x.b.notes ?? '', xcolor: x.it.color || x.b.xcolor || '', xsyncAt: Date.now() } });
   for (const x of [...plan.update.filter(x => !x.quiet), ...plan.move]) rows.push({ col: 'bookings', id: x.b.id, data: xsDoc(x.b, x.xid, x.it, x.v, x.sheet) });
   for (const x of plan.cancel) rows.push({ col: 'bookings', id: x.b.id, data: { ...x.b, status: 'cancelled', xgone: true, xsyncAt: Date.now() } });
@@ -3404,10 +3394,17 @@ async function xsRun(src = 'manual', file = null) {
     const { items } = XP.extract(XLSX, wb);
     if (items.length < 50) throw new Error('อ่านไฟล์ได้น้อยผิดปกติ · ไม่ได้อัปเดตอะไร');
     let transfers = null; try { transfers = xsTransfers(XLSX, wb); } catch (e) { console.warn('transfer table', e); }
-    return await xsApply(xsPlan(items), { src, hash, transfers });
+    const sum = await xsApply(xsPlan(items), { src, hash, transfers });
+    // the extra bed / baby cot workbook is a separate file; a problem there must not undo the booking sync
+    const eid = xsDriveId(settings().xlsxEquipUrl);
+    if (eid && !file && window.bvDesktop && window.bvDesktop.fetchSheet) {
+      try { sum.eq = await xsEquipSync(await window.bvDesktop.fetchSheet(eid)); } catch (e) { console.warn('equip sheet', e); sum.eq = { error: errMsg(e) }; }
+      await Store.merge('state', 'xlsync', { eq: sum.eq }).catch(() => {});
+    }
+    return sum;
   } catch (e) { await Store.merge('state', 'xlsync', { running: null, error: String(e.message || e), errorAt: Date.now() }).catch(() => {}); throw e; }
 }
-const xsMsg = r => `ดึงจาก Excel แล้ว · เพิ่ม ${r.added} · แก้ ${r.updated} · ย้าย ${r.moved} · ยกเลิก ${r.cancelled}${r.tx && (r.tx.added + r.tx.changed) ? ` · รถรับส่ง ${r.tx.added + r.tx.changed}` : ''}${r.nDiffs ? ` · ไม่ตรงกับ Excel ${r.nDiffs}` : ''}`;
+const xsMsg = r => `ดึงจาก Excel แล้ว${r.eq && r.eq.changed ? ` · เตียงเสริม/เปล ${r.eq.changed} การจอง` : ''} · เพิ่ม ${r.added} · แก้ ${r.updated} · ย้าย ${r.moved} · ยกเลิก ${r.cancelled}${r.tx && (r.tx.added + r.tx.changed) ? ` · รถรับส่ง ${r.tx.added + r.tx.changed}` : ''}${r.nDiffs ? ` · ไม่ตรงกับ Excel ${r.nDiffs}` : ''}`;
 let xsStarted = false;
 function xsAutoStart() {
   if (xsStarted || !window.bvDesktop || !window.bvDesktop.fetchSheet) return; xsStarted = true;
@@ -3419,9 +3416,9 @@ function xsAutoStart() {
 function renderXsCard() {
   const box = $('#xsCard'); if (!box) return;
   const s = settings(), st = M.state.get('xlsync') || {}, admin = isAdmin(), cf = st.conflicts || [], tx = st.tx || {};
-  if (!box.contains(document.activeElement)) { $('#xsUrl').value = s.xlsxUrl || ''; $('#xsAuto').checked = !!s.xlsxAuto; }
-  $('#xsUrl').disabled = $('#xsAuto').disabled = !admin; $('#xsSaveCfg').hidden = !admin;
-  $('#xsStatus').innerHTML = st.at ? `ดึงล่าสุด ${fmtTime(st.at)} โดย ${esc(nameOf(st.by))} · เพิ่ม ${st.added || 0} · แก้ ${st.updated || 0} · ย้าย ${st.moved || 0} · ยกเลิก ${st.cancelled || 0} · รถรับส่ง เพิ่ม ${tx.added || 0} แก้ ${tx.changed || 0}`
+  if (!box.contains(document.activeElement)) { $('#xsUrl').value = s.xlsxUrl || ''; $('#xsEqUrl').value = s.xlsxEquipUrl || ''; $('#xsAuto').checked = !!s.xlsxAuto; }
+  $('#xsUrl').disabled = $('#xsEqUrl').disabled = $('#xsAuto').disabled = !admin; $('#xsSaveCfg').hidden = !admin;
+  $('#xsStatus').innerHTML = st.at ? `ดึงล่าสุด ${fmtTime(st.at)} โดย ${esc(nameOf(st.by))} · เพิ่ม ${st.added || 0} · แก้ ${st.updated || 0} · ย้าย ${st.moved || 0} · ยกเลิก ${st.cancelled || 0} · รถรับส่ง เพิ่ม ${tx.added || 0} แก้ ${tx.changed || 0}${st.eq ? (st.eq.error ? ` · <span class="owe">ไฟล์เตียงเสริม/เปลดึงไม่ได้: ${esc(st.eq.error)}</span>` : ` · เตียงเสริม/เปล แก้ ${st.eq.changed || 0} การจอง${st.eq.miss ? ` · ชื่อที่หาการจองไม่เจอ ${st.eq.miss}` : ''}`) : ''}`
     + (st.error && (st.errorAt || 0) > (st.at || 0) ? `<div class="owe">ดึงไม่สำเร็จ ${fmtTime(st.errorAt)}: ${esc(st.error)}</div>` : '') : 'ยังไม่เคยดึงข้อมูล';
   const fmt = x => x ? `ห้อง ${esc(roomNo(x.roomId))} · ${esc(x.name || '')} · ${fmtShort(x.checkIn)} → ${fmtShort(x.checkOut)}` : '—';
   const row = c => `<tr><td>${esc(c.why)}</td><td>${fmt(c.sheet)}</td><td>${fmt(c.app)}</td><td class="r">${c.id ? `<button class="btn sm" data-xsopen="${esc(c.id)}">เปิด</button>` : ''}${c.sheet && c.id ? ` <button class="btn sm" data-xsuse="${esc(c.xid)}">ใช้ตาม Excel</button>` : ''}${c.kind !== 'diff' && !c.sheet && c.id ? ` <button class="btn sm ghost" data-xsok="${esc(c.xid)}">เก็บไว้ในแอป</button>` : ''}</td></tr>`;
@@ -3434,8 +3431,8 @@ function renderXsCard() {
 }
 function bindXsCard() {
   const box = $('#xsCard'); if (!box) return;
-  $('#xsSaveCfg').onclick = async () => { const url = $('#xsUrl').value.trim(); if (url && !xsDriveId(url)) return toast('ลิงก์ไม่ถูกต้อง · ใช้ลิงก์จาก Google Drive / Google Sheets', 'err');
-    if (await save(() => Store.merge('settings', 'main', { xlsxUrl: url, xlsxAuto: $('#xsAuto').checked }), 'บันทึกการตั้งค่าแล้ว')) renderXsCard(); };
+  $('#xsSaveCfg').onclick = async () => { const url = $('#xsUrl').value.trim(), eurl = $('#xsEqUrl').value.trim(); if ((url && !xsDriveId(url)) || (eurl && !xsDriveId(eurl))) return toast('ลิงก์ไม่ถูกต้อง · ใช้ลิงก์จาก Google Drive / Google Sheets', 'err');
+    if (await save(() => Store.merge('settings', 'main', { xlsxUrl: url, xlsxEquipUrl: eurl, xlsxAuto: $('#xsAuto').checked }), 'บันทึกการตั้งค่าแล้ว')) renderXsCard(); };
   const go = async file => { const b = $('#xsNow'); b.disabled = true; b.classList.add('spin');
     try { const r = await xsRun('manual', file); toast(xsMsg(r)); }
     catch (e) { toast(errMsg(e), 'err'); } finally { b.disabled = false; b.classList.remove('spin'); renderXsCard(); } };
@@ -3541,4 +3538,197 @@ function bindRepairs() {
   $('#rpList').addEventListener('click', open);
   const dl = $('#dlRepairs'); if (dl) dl.addEventListener('click', open);
   const b = $('#dlRpNew'); if (b) b.onclick = () => openRepair(null);
+}
+
+/* ================= EXTRA BEDS & COTS inside the booking chart ================= */
+// A booking may carry b.equip = [{ id, k: 'xbed' | 'cot', u: unit row (0 = #1) or null = placed automatically,
+// a: nights after check-in it starts, z: nights before check-out it ends }]. The counts (extraBeds / babyCots)
+// stay the source of how many there are; items missing from b.equip are filled in as "whole stay, auto row".
+function eqItems(b, kind) {
+  const n = EQ[kind].of(b); if (!n) return [];
+  const own = (Array.isArray(b.equip) ? b.equip : []).filter(x => x && x.k === kind).slice(0, n).map(x => ({ ...x }));
+  while (own.length < n) own.push({ id: 'v' + kind + own.length, k: kind, u: null, a: 0, z: 0, virt: true });
+  return own;
+}
+function eqSpan(b, it) { const n = nightsOf(b); let a = Math.max(0, +it.a || 0), z = Math.max(0, +it.z || 0); if (a + z >= n) { a = 0; z = 0; } return { ci: addDays(b.checkIn, a), co: addDays(b.checkOut, -z), a, z }; }
+function eqSpans(kind, from, to, exceptId) {
+  const out = [];
+  for (const b of allBookings()) {
+    if (!isActive(b) || b.kind === 'block' || b.id === exceptId || !(b.checkIn < to && b.checkOut > from)) continue;
+    for (const it of eqItems(b, kind)) { const s = eqSpan(b, it); if (s.ci < to && s.co > from) out.push({ b, it, ...s }); }
+  }
+  return out;
+}
+// rows #1, #2 …: items pinned to a row go there first, the rest take the first free row
+function eqUnits(kind, from, to) {
+  const spans = eqSpans(kind, from, to).sort((x, y) => x.ci < y.ci ? -1 : x.ci > y.ci ? 1 : String(x.b.id) < String(y.b.id) ? -1 : 1);
+  const units = [], free = (u, s) => (units[u] || []).every(x => x.co <= s.ci || x.ci >= s.co);
+  for (const s of spans.filter(s => s.it.u != null)) { const u = Math.max(0, +s.it.u || 0); if (!units[u]) units[u] = []; if (!free(u, s)) { s.clash = true; units[u].forEach(x => { if (!(x.co <= s.ci || x.ci >= s.co)) x.clash = true; }); } units[u].push(s); }
+  for (const s of spans.filter(s => s.it.u == null)) { let u = 0; while (!free(u, s)) u++; if (!units[u]) units[u] = []; units[u].push(s); }
+  for (let i = 0; i < units.length; i++) if (!units[i]) units[i] = [];
+  return units;
+}
+const eqWindow = (start, end) => [addDays(start, -120), addDays(end, 120)];
+function eqUnitOf(kind, b, itemId, start, end) { const units = eqUnits(kind, ...eqWindow(start, end)); for (let i = 0; i < units.length; i++) if (units[i].some(s => s.b.id === b.id && s.it.id === itemId)) return i; return null; }
+const EQ_COL = { xbed: '#2f9e8f', cot: '#d6709b' };
+function eqChartRows(start, end, N, W, q, hit) {
+  let rows = '';
+  for (const [k, qq] of Object.entries(EQ)) {
+    const stock = qq.stock(), units = eqUnits(k, ...eqWindow(start, end)), nRows = Math.max(stock, units.length, 1), tonight = eqOnNight(k, todayStr());
+    rows += `<div class="g-group eq-group" data-eqgroup="${k}"><i class="eq-sw" style="background:${EQ_COL[k]}"></i>${qq.label} (${qq.en}) · มี ${stock} ตัว · คืนนี้ใช้ ${tonight}${tonight > stock ? ' <span class="owe">เกิน</span>' : ''}${k === 'xbed' && isAdmin() ? '<button class="btn sm ghost" data-eqimport>นำเข้าจาก Excel</button>' : ''}</div>`;
+    for (let i = 0; i < nRows; i++) {
+      const over = i >= stock; let bars = '';
+      for (const s of (units[i] || []).filter(s => s.ci < end && s.co > start)) {
+        const b = s.b, a0 = s.ci < start ? start : s.ci, e0 = s.co > end ? end : s.co;
+        const left = diffDays(start, a0) * W + (s.ci >= start ? W / 2 : 0), right = diffDays(start, e0) * W + (s.co <= end ? W / 2 : 0);
+        const bw = Math.max(14, right - left - 3), label = `${roomNo(b.roomId)} · ${b.guest}`, col = EQ_COL[k]; // one colour per kind, not per channel
+        const part = s.a || s.z ? ` · ใช้ ${fmtShort(s.ci)} → ${fmtShort(s.co)}` : '';
+        bars += `<div class="bk eqb s-${esc(b.status || 'confirmed')}${col ? ' chan' : ''}${over || s.clash ? ' clash' : ''}${(q || S.gChan) ? (hit(b) ? ' hit' : ' miss') : ''}" data-eb="${esc(b.id)}" data-ei="${esc(s.it.id)}" data-ek="${k}" style="left:${left + 1}px;width:${bw}px${col ? `;--bc:${col};--bi:${inkOn(col)}` : ''}" title="${esc(`${qq.label} #${i + 1} · ห้อง ${label} · พัก ${fmtD(b.checkIn)} → ${fmtD(b.checkOut)}${part}`)}"><span class="nm">${esc(label)}</span>${b.status !== 'checked_out' ? '<i class="hd l"></i><i class="hd r"></i>' : ''}</div>`;
+      }
+      rows += `<div class="g-row eq-row${over ? ' over' : ''}" data-eq="${k}" data-unit="${i}"><div class="g-rh"><span class="no">#${i + 1}</span><span class="ty">${over ? 'เกินจำนวน' : esc(qq.en)}</span></div><div class="g-lane" data-start="${start}" style="width:${N * W}px">${bars}</div></div>`;
+    }
+  }
+  return rows;
+}
+// write a booking's whole item list back (virtual items become real ones) and keep the counts in step
+async function eqSave(b, fn, msg) {
+  const list = ['xbed', 'cot'].flatMap(k => eqItems(b, k)).map(x => ({ id: x.virt ? Store.newId() : x.id, k: x.k, u: x.u ?? null, a: +x.a || 0, z: +x.z || 0, old: x.id }));
+  if (fn(list) === false) return false;
+  const clean = list.map(({ old, ...x }) => x), xb = clean.filter(x => x.k === 'xbed').length, cb = clean.filter(x => x.k === 'cot').length;
+  const ok = await save(() => Store.merge('bookings', b.id, { equip: clean, extraBeds: xb, extraBed: xb > 0, babyCots: cb, babyCot: cb > 0, updatedAt: Date.now(), updatedBy: Store.me?.id }), msg);
+  if (ok) logAct(`${msg} (ตารางการจอง)`);
+  return ok;
+}
+// is row u of this kind free for [ci, co), ignoring one item?
+function eqRowFree(kind, u, ci, co, skipB, skipI) {
+  const units = eqUnits(kind, addDays(ci, -120), addDays(co, 120));
+  return (units[u] || []).filter(s => !(s.b.id === skipB && s.it.id === skipI)).filter(s => s.ci < co && ci < s.co).map(s => s.b);
+}
+function eqAddMenu(kind, unit, a1, b1, x, y) { // b1 = last night picked
+  const co1 = addDays(b1, 1), q = EQ[kind];
+  const stays = allBookings().filter(b => isActive(b) && b.kind !== 'block' && b.checkIn < co1 && b.checkOut > a1).sort((p, r) => roomNo(p.roomId) < roomNo(r.roomId) ? -1 : 1);
+  if (!stays.length) return toast(`ไม่มีแขกพักช่วง ${fmtShort(a1)}${b1 !== a1 ? ' → ' + fmtShort(b1) : ''}`, 'err');
+  chartMenu(x, y, [{ label: `<b>เพิ่ม${q.label} #${unit + 1} ให้</b>`, run: () => {} }, '-', ...stays.slice(0, 18).map(b => ({ label: `ห้อง ${esc(roomNo(b.roomId))} · ${esc(b.guest)} <small>${fmtShort(b.checkIn)} → ${fmtShort(b.checkOut)}${q.of(b) ? ` · มีแล้ว ${q.of(b)}` : ''}</small>`, icon: 'plus', run: () => {
+    const n = nightsOf(b); let a = Math.max(0, diffDays(b.checkIn, a1)), z = Math.max(0, diffDays(co1, b.checkOut)); if (a + z >= n) { a = 0; z = 0; }
+    const ci = addDays(b.checkIn, a), co = addDays(b.checkOut, -z), busy = eqRowFree(kind, unit, ci, co);
+    if (busy.length) return toast(`${q.label} #${unit + 1} ไม่ว่างช่วงนี้ (${busy.map(x => x.guest).join(', ')})`, 'err');
+    eqSave(b, list => { list.push({ id: Store.newId(), k: kind, u: unit, a, z }); }, `เพิ่ม${q.label} #${unit + 1} ให้ ${b.guest} · ห้อง ${roomNo(b.roomId)} · ${fmtShort(ci)} → ${fmtShort(co)}`);
+  } }))]);
+}
+function eqBarMenu(bar, x, y) {
+  const b = M.bookings.get(bar.dataset.eb); if (!b) return; const k = bar.dataset.ek, id = bar.dataset.ei, q = EQ[k], it = eqItems(b, k).find(i => i.id === id); if (!it) return;
+  const s = eqSpan(b, it);
+  chartMenu(x, y, [
+    { label: 'แก้ไขการจอง', icon: 'note', run: () => openBooking(b) },
+    ...(s.a || s.z ? [{ label: 'ใช้ตลอดการพัก', icon: 'calendar', run: () => eqSave(b, l => { const t = l.find(i => i.old === id); t.a = 0; t.z = 0; }, `${q.label} ${b.guest} ใช้ตลอดการพัก`) }] : []),
+    ...(it.u != null ? [{ label: 'ให้ระบบจัดตัวให้เอง', icon: 'refresh', run: () => eqSave(b, l => { l.find(i => i.old === id).u = null; }, `${q.label} ${b.guest} จัดตัวอัตโนมัติ`) }] : []),
+    '-',
+    { label: `เอา${q.label}ออก 1 ตัว`, icon: 'logout', danger: true, run: () => eqSave(b, l => { l.splice(l.findIndex(i => i.old === id), 1); }, `เอา${q.label}ออกจาก ${b.guest} · ห้อง ${roomNo(b.roomId)}`) },
+  ]);
+}
+function bindEquipChart() {
+  const box = $('#gscroll');
+  S.gMode = lsGet('bv.gMode', 'rooms');
+  $('#gView').addEventListener('click', e => { const b = e.target.closest('[data-gview]'); if (!b) return; if (b.dataset.gview === (S.gMode || 'rooms')) return; S.gAnim = b.dataset.gview === 'equip' ? 'g-in-r' : 'g-in-l'; S.gMode = b.dataset.gview; lsSet('bv.gMode', S.gMode); $('#gscroll').scrollTop = 0; renderChart(); });
+  box.addEventListener('click', e => {
+    if (e.target.closest('[data-eqimport]')) { $('#eqFile').click(); return; }
+    const bar = e.target.closest('.eqb'); if (!bar) return; e.stopPropagation(); if (chartDragged) return; const b = M.bookings.get(bar.dataset.eb); if (b) openBooking(b);
+  });
+  $('#eqFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importEquipExcel(f); };
+  box.addEventListener('contextmenu', e => {
+    const bar = e.target.closest('.eqb'); if (bar) { e.preventDefault(); e.stopPropagation(); eqBarMenu(bar, e.clientX, e.clientY); return; }
+    const row = e.target.closest('.g-row[data-eq]'), lane = e.target.closest('.g-lane'); if (!row || !lane) return; e.preventDefault(); e.stopPropagation();
+    const d = laneDay(lane, e.clientX); eqAddMenu(row.dataset.eq, +row.dataset.unit, d, d, e.clientX, e.clientY);
+  }, true);
+  box.addEventListener('dblclick', e => { if (e.target.closest('.bk')) return; const row = e.target.closest('.g-row[data-eq]'), lane = e.target.closest('.g-lane'); if (!row || !lane) return; const d = laneDay(lane, e.clientX); eqAddMenu(row.dataset.eq, +row.dataset.unit, d, d, e.clientX, e.clientY); });
+  // drag over empty cells of a row → choose which guest gets it for those nights
+  let pick = null, drag = null, tip = null;
+  box.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const bar = e.target.closest('.eqb');
+    if (bar) { const b = M.bookings.get(bar.dataset.eb); if (!b || b.status === 'checked_out') return; const it = eqItems(b, bar.dataset.ek).find(i => i.id === bar.dataset.ei); if (!it) return;
+      const hd = e.target.closest('.hd'), row = bar.closest('.g-row[data-eq]');
+      drag = { b, it, k: bar.dataset.ek, bar, mode: hd ? (hd.classList.contains('l') ? 'start' : 'end') : 'unit', x0: e.clientX, y0: e.clientY, left0: parseFloat(bar.style.left), w0: parseFloat(bar.style.width), unit0: +row.dataset.unit, unit: +row.dataset.unit, days: 0, on: false, span: eqSpan(b, it) };
+      return; }
+    if (e.target.closest('.bk')) return;
+    const lane = e.target.closest('.g-lane'), row = lane && lane.closest('.g-row[data-eq]'); if (!row) return;
+    pick = { lane, kind: row.dataset.eq, unit: +row.dataset.unit, d0: laneDay(lane, e.clientX), d1: null, el: null, x0: e.clientX };
+  });
+  const tipShow = (e, text, bad) => { if (!tip) { tip = document.createElement('div'); tip.className = 'drag-tip'; document.body.appendChild(tip); } tip.textContent = text; tip.classList.toggle('bad', !!bad); tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 16) + 'px'; };
+  const result = () => { const { b, mode, days, span } = drag, n = nightsOf(b); let a = span.a, z = span.z;
+    if (mode === 'start') a = Math.min(Math.max(0, a + days), n - z - 1); else if (mode === 'end') z = Math.min(Math.max(0, z - days), n - a - 1);
+    return { a, z, ci: addDays(b.checkIn, a), co: addDays(b.checkOut, -z), unit: drag.unit }; };
+  window.addEventListener('pointermove', e => {
+    if (pick) {
+      if (!pick.el && Math.abs(e.clientX - pick.x0) < 6) return;
+      if (!pick.el) { pick.el = document.createElement('div'); pick.el.className = 'g-pick'; pick.lane.appendChild(pick.el); }
+      pick.d1 = laneDay(pick.lane, e.clientX);
+      const a1 = pick.d0 < pick.d1 ? pick.d0 : pick.d1, b1 = pick.d0 < pick.d1 ? pick.d1 : pick.d0, W = cw();
+      pick.el.style.left = diffDays(pick.lane.dataset.start, a1) * W + 'px'; pick.el.style.width = (diffDays(a1, b1) + 1) * W + 'px';
+      const busy = eqRowFree(pick.kind, pick.unit, a1, addDays(b1, 1)).length > 0; pick.el.classList.toggle('bad', busy); pick.el.textContent = `${diffDays(a1, b1) + 1} คืน${busy ? ' · ไม่ว่าง' : ''}`;
+      return;
+    }
+    if (!drag) return;
+    const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+    if (!drag.on) { if (Math.hypot(dx, dy) < 6) return; drag.on = true; drag.bar.classList.add('dragging'); document.body.classList.add('g-dragging'); closePop(); }
+    const W = cw();
+    if (drag.mode === 'unit') {
+      const row = document.elementFromPoint(e.clientX, e.clientY)?.closest(`.g-row[data-eq="${drag.k}"]`);
+      if (row && +row.dataset.unit !== drag.unit) { row.querySelector('.g-lane').appendChild(drag.bar); drag.unit = +row.dataset.unit; }
+    } else {
+      drag.days = Math.round(dx / W); const r = result();
+      const left = drag.left0 + (r.a - drag.span.a) * W, right = drag.left0 + drag.w0 - (r.z - drag.span.z) * W;
+      drag.bar.style.left = left + 'px'; drag.bar.style.width = Math.max(14, right - left) + 'px';
+    }
+    const r = result(), busy = eqRowFree(drag.k, r.unit, r.ci, r.co, drag.b.id, drag.it.id);
+    drag.bar.classList.toggle('drag-bad', busy.length > 0);
+    tipShow(e, `${EQ[drag.k].label} #${r.unit + 1} · ${fmtShort(r.ci)} → ${fmtShort(r.co)} · ${diffDays(r.ci, r.co)} คืน${busy.length ? ' · ไม่ว่าง' : ''}`, busy.length > 0);
+  });
+  window.addEventListener('pointerup', async e => {
+    if (pick) { const p = pick; pick = null; if (!p.el) return; p.el.remove(); chartDragged = true; setTimeout(() => { chartDragged = false; }, 250);
+      const a1 = p.d0 < p.d1 ? p.d0 : p.d1, b1 = p.d0 < p.d1 ? p.d1 : p.d0; eqAddMenu(p.kind, p.unit, a1, b1, e.clientX, e.clientY); return; }
+    if (!drag) return; const d = drag; if (tip) { tip.remove(); tip = null; } document.body.classList.remove('g-dragging');
+    if (!d.on) { drag = null; return; }
+    chartDragged = true; setTimeout(() => { chartDragged = false; }, 250);
+    const r = result(); drag = null;
+    if (r.unit === d.unit0 && r.a === d.span.a && r.z === d.span.z) { renderChart(); return; }
+    const busy = eqRowFree(d.k, r.unit, r.ci, r.co, d.b.id, d.it.id);
+    if (busy.length) { toast(`${EQ[d.k].label} #${r.unit + 1} ไม่ว่างช่วงนี้ (${busy.map(x => x.guest).join(', ')}) · ไม่ได้ย้าย`, 'err'); renderChart(); return; }
+    const q = EQ[d.k], msg = r.unit !== d.unit0 ? `ย้าย${q.label}ของ ${d.b.guest} ไปตัวที่ #${r.unit + 1}` : `${q.label} ${d.b.guest} ใช้ ${fmtShort(r.ci)} → ${fmtShort(r.co)}`;
+    const ok = await eqSave(d.b, list => { const t = list.find(i => i.old === d.it.id); if (!t) return false; t.a = r.a; t.z = r.z; t.u = r.unit; }, msg);
+    if (!ok) renderChart();
+  });
+}
+function eqScrollTo() { requestAnimationFrame(() => { const g = $('#gscroll .eq-group'); if (g) { const box = $('#gscroll'); box.scrollTop = g.offsetTop - 70; } }); }
+
+/* ---- extra beds & cots from the "Booking _Extra bed_Baby cot" workbook on Google Drive ---- */
+// Same rules as the bookings: what the sheet changed wins; what only the app changed stays.
+// Each guest name in a row #1, #2 … becomes that unit for the guest's whole stay.
+async function xsEquipSync(buf) {
+  const entries = parseEquipBook(XLSX.read(buf, { type: 'array', cellDates: false }));
+  if (!entries.length) return { changed: 0, miss: 0 };
+  const lo = entries.reduce((m, e) => !m || e.date < m ? e.date : m, ''), hi = entries.reduce((m, e) => e.date > m ? e.date : m, '');
+  const { res, miss } = matchEquip(entries), rows = [], now = Date.now();
+  // each name is written once, on the day the bed / cot goes in; it is used until the next name in that row (or check-out)
+  const rowsOf = new Map(); for (const e of entries) { const k = e.kind + e.unit; if (!rowsOf.has(k)) rowsOf.set(k, []); rowsOf.get(k).push(e); }
+  for (const l of rowsOf.values()) l.sort((p, q) => p.date < q.date ? -1 : 1);
+  const spanOf = (b, k, u) => { const mine = entries.filter(e => e.bid === b.id && e.kind === k && e.unit === u).map(e => e.date).sort(); if (!mine.length) return { a: 0, z: 0 };
+    const n = nightsOf(b), first = mine[0] < b.checkIn ? b.checkIn : mine[0], next = (rowsOf.get(k + u) || []).find(e => e.date > first && e.bid !== b.id);
+    let a = Math.max(0, diffDays(b.checkIn, first)), z = next && next.date < b.checkOut ? diffDays(next.date, b.checkOut) : 0; if (a + z >= n) { a = 0; z = 0; } return { a, z }; };
+  const sheetOf = b => { const x = res.get(b.id), o = {}; for (const k of ['xbed', 'cot']) o[k] = x ? [...x[k]].sort((p, q) => p - q).map(u => ({ u, ...spanOf(b, k, u) })) : []; return o; };
+  for (const b of allBookings()) {
+    if (!isActive(b) || b.kind === 'block' || b.checkOut < lo || b.checkIn > hi) continue;
+    const want = sheetOf(b), last = b.xeq || null;
+    if (!res.has(b.id) && !last) continue; // never in the sheet: nothing to do
+    if (last && JSON.stringify(last) === JSON.stringify(want)) continue; // sheet unchanged for this guest: keep whatever the app has
+    const keep = (Array.isArray(b.equip) ? b.equip : []), list = [];
+    for (const k of ['xbed', 'cot']) {
+      if (last && JSON.stringify(last[k]) === JSON.stringify(want[k])) { list.push(...eqItems(b, k).map(x => ({ id: x.virt ? Store.newId() : x.id, k, u: x.u ?? null, a: +x.a || 0, z: +x.z || 0 }))); continue; }
+      want[k].forEach(w => { const old = keep.find(x => x.k === k && x.u === w.u - 1); list.push({ id: old ? old.id : Store.newId(), k, u: w.u - 1, a: w.a, z: w.z }); });
+    }
+    const xb = list.filter(x => x.k === 'xbed').length, cb = list.filter(x => x.k === 'cot').length;
+    rows.push({ col: 'bookings', id: b.id, data: { ...b, equip: list, extraBeds: xb, extraBed: xb > 0, babyCots: cb, babyCot: cb > 0, xeq: want, xsyncAt: now } });
+  }
+  if (rows.length) await Store.putMany(rows);
+  return { changed: rows.length, miss: miss.length, missList: miss.slice(0, 40).map(e => ({ date: e.date, kind: e.kind, unit: e.unit, text: String(e.text).slice(0, 60) })) };
 }
