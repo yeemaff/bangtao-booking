@@ -68,18 +68,30 @@ const Store = (() => {
     if (!ok) { const e = new Error('taken'); e.code = 'already_setup'; throw e; }
     return loadMe();
   }
-  async function signOut() { try { channel && client.removeChannel(channel); } catch {} channel = null; me = null; await client.auth.signOut(); COLS.forEach(c => maps[c].clear()); staff.clear(); }
+  async function signOut() { try { channel && client.removeChannel(channel); } catch {} channel = null; me = null; await client.auth.signOut(); COLS.forEach(c => maps[c].clear()); staff.clear(); lastAt = null; }
 
-  async function loadAll() {
+  // first load pulls everything; later reloads (wake, reconnect) pull only rows changed since then
+  // plus the bare list of ids to spot deletions — keeps Supabase egress (bandwidth quota) small.
+  let lastAt = null;
+  async function pages(cols, q) {
     const all = [];
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await client.from('docs').select('col,id,data,updated_by,updated_at').order('col').order('id').range(from, from + 999);
+      let r = client.from('docs').select(cols); if (q) r = q(r);
+      const { data, error } = await r.order('col').order('id').range(from, from + 999);
       if (error) throw error;
       all.push(...data);
       if (data.length < 1000) break;
     }
-    COLS.forEach(c => maps[c].clear());
-    for (const r of all) { if (!maps[r.col]) maps[r.col] = new Map(); maps[r.col].set(r.id, rowToDoc(r)); }
+    return all;
+  }
+  async function loadAll(full) {
+    const since = !full && lastAt ? new Date(Date.parse(lastAt) - 5 * 60000).toISOString() : null; // 5 min overlap for clock skew
+    const rows = await pages('col,id,data,updated_by,updated_at', since ? r => r.gt('updated_at', since) : null);
+    if (since) {
+      const live = new Set((await pages('col,id')).map(r => r.col + '\u0000' + r.id));
+      for (const c of Object.keys(maps)) for (const id of [...maps[c].keys()]) if (!live.has(c + '\u0000' + id)) maps[c].delete(id);
+    } else COLS.forEach(c => maps[c].clear());
+    for (const r of rows) { if (!maps[r.col]) maps[r.col] = new Map(); maps[r.col].set(r.id, rowToDoc(r)); if (!lastAt || r.updated_at > lastAt) lastAt = r.updated_at; }
     await loadStaff();
     emit('all');
   }
