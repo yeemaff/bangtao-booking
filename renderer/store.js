@@ -87,11 +87,17 @@ const Store = (() => {
   async function loadAll(full) {
     const since = !full && lastAt ? new Date(Date.parse(lastAt) - 5 * 60000).toISOString() : null; // 5 min overlap for clock skew
     const rows = await pages('col,id,data,updated_by,updated_at', since ? r => r.gt('updated_at', since) : null);
-    if (since) {
-      const live = new Set((await pages('col,id')).map(r => r.col + '\u0000' + r.id));
-      for (const c of Object.keys(maps)) for (const id of [...maps[c].keys()]) if (!live.has(c + '\u0000' + id)) maps[c].delete(id);
-    } else COLS.forEach(c => maps[c].clear());
+    if (!since) COLS.forEach(c => maps[c].clear());
     for (const r of rows) { if (!maps[r.col]) maps[r.col] = new Map(); maps[r.col].set(r.id, rowToDoc(r)); if (!lastAt || r.updated_at > lastAt) lastAt = r.updated_at; }
+    if (since) { // something deleted while we were away? only then pull the id list
+      const { count, error } = await client.from('docs').select('id', { count: 'exact', head: true });
+      if (error) throw error;
+      let mine = 0; for (const c of Object.keys(maps)) mine += maps[c].size;
+      if (count !== mine) {
+        const live = new Set((await pages('col,id')).map(r => r.col + '\u0000' + r.id));
+        for (const c of Object.keys(maps)) for (const id of [...maps[c].keys()]) if (!live.has(c + '\u0000' + id)) maps[c].delete(id);
+      }
+    }
     await loadStaff();
     emit('all');
   }
@@ -165,7 +171,14 @@ const Store = (() => {
   window.addEventListener('focus', wake);
   if (window.bvDesktop && window.bvDesktop.onResume) window.bvDesktop.onResume(() => reconnect(true));
   let reloading = null;
-  function reload() { if (reloading) return reloading; reloading = loadAll().catch(() => {}).finally(() => { reloading = null; }); return reloading; }
+  // at most one background reload a minute, even if the connection keeps dropping and coming back
+  let lastReload = 0;
+  function reload() {
+    if (reloading) return reloading;
+    const wait = Math.max(0, lastReload + 60000 - Date.now());
+    reloading = new Promise(r => setTimeout(r, wait)).then(() => { lastReload = Date.now(); return loadAll(); }).catch(() => {}).finally(() => { reloading = null; });
+    return reloading;
+  }
   window.addEventListener('online', () => { retry = 0; reconnect(true); });
   window.addEventListener('offline', () => setStatus(false, 'ออฟไลน์ · ไม่มีอินเทอร์เน็ต'));
 

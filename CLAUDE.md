@@ -36,6 +36,11 @@ Always show changes in the web test first and release only when the owner says s
   calendar. Respect prefers-reduced-motion.
 
 ## Open items / ideas
+- Nov 2026: Supabase free plan egress blew past quota (20 GB of 5.5 GB); project restricted after 13 Nov. Owner paused
+  the app ("closed beta"), staff back on Excel. Plan: fix what's needed, then one "open beta" release.
+  Egress fixes so far: 1.4.1 incremental reload; on main (unreleased): reload throttled to 1/min + id list only when
+  counts differ. Still unknown which traffic dominated — check Usage dashboard / API logs before the next release.
+  Realtime broadcasts of full booking rows to every client are the next suspect.
 - Owner should run the latest `supabase-setup.sql` (reception edit rates/docs/todos + `repairs` view).
 - Future: LINE bot for repair notifications (read `public.repairs`, push via Supabase webhook/edge function).
 - The Extra bed workbook on Drive is shared "anyone with link can edit" — recommend viewer-only.
