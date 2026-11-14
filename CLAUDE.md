@@ -37,8 +37,8 @@ Always show changes in the web test first and release only when the owner says s
 
 ## Open items / ideas
 - **PAUSED (Nov 2026).** Supabase free plan egress hit 40.7 GB of 5.5 GB; services restricted 14 Nov, quota refills
-  3 Dec 2026. Owner is pausing the Supabase project (Settings → General → Pause project) — must be restored within
-  90 days (~mid Feb 2027) or only a backup download is left. Staff are on Excel. Owner wants to stay on the FREE plan;
+  3 Dec 2026. Project PAUSED 14 Nov 2026; button "Resume project" on the project home works until 19 Dec 2027
+  (after that only a backup download is left). Staff are on Excel. Owner wants to stay on the FREE plan;
   paying (Pro $25/mo) is the last resort. The app is treated as a closed beta; next release = "open beta".
   Supabase Logs on the free plan did not keep the bad traffic, so the cause is still unknown. Expected normal use is
   < 1 GB/month (~5,100 bookings ≈ 3 MB per full load), so 40 GB means a loop/bug.
@@ -51,7 +51,7 @@ Always show changes in the web test first and release only when the owner says s
   4. Load only active bookings (e.g. checkOut ≥ 3 months ago + future); older history on demand (search/open).
   5. Realtime: stop broadcasting full rows to every client — use a light "changed" signal and fetch the delta;
      let only one designated PC run the 30-min Excel sync (others skip).
-  6. Restore project after 3 Dec, test on 1–2 PCs for ~3 days watching the meter, then roll out to all.
+  6. Resume project after 3 Dec, test on 1–2 PCs for ~3 days watching the meter, then roll out to all.
   Fallback before paying: move to another free backend (big job, avoid if possible).
 - Owner should run the latest `supabase-setup.sql` (reception edit rates/docs/todos + `repairs` view).
 - Future: LINE bot for repair notifications (read `public.repairs`, push via Supabase webhook/edge function).
