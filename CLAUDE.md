@@ -36,11 +36,23 @@ Always show changes in the web test first and release only when the owner says s
   calendar. Respect prefers-reduced-motion.
 
 ## Open items / ideas
-- Nov 2026: Supabase free plan egress blew past quota (20 GB of 5.5 GB); project restricted after 13 Nov. Owner paused
-  the app ("closed beta"), staff back on Excel. Plan: fix what's needed, then one "open beta" release.
-  Egress fixes so far: 1.4.1 incremental reload; on main (unreleased): reload throttled to 1/min + id list only when
-  counts differ. Still unknown which traffic dominated — check Usage dashboard / API logs before the next release.
-  Realtime broadcasts of full booking rows to every client are the next suspect.
+- **PAUSED (Nov 2026).** Supabase free plan egress hit 40.7 GB of 5.5 GB; services restricted 14 Nov, quota refills
+  3 Dec 2026. Owner is pausing the Supabase project (Settings → General → Pause project) — must be restored within
+  90 days (~mid Feb 2027) or only a backup download is left. Staff are on Excel. Owner wants to stay on the FREE plan;
+  paying (Pro $25/mo) is the last resort. The app is treated as a closed beta; next release = "open beta".
+  Supabase Logs on the free plan did not keep the bad traffic, so the cause is still unknown. Expected normal use is
+  < 1 GB/month (~5,100 bookings ≈ 3 MB per full load), so 40 GB means a loop/bug.
+  Done: 1.4.1 incremental reload (released); on main, unreleased: reload throttled to 1/min, id list only when counts differ.
+  Plan agreed (do in this order, show in web test, release only when owner says):
+  1. In-app egress meter: count bytes received from Supabase per machine per day; show in admin settings and store
+     a daily total in `state` so we can see which PC/what burns quota.
+  2. Daily cap / circuit breaker (e.g. 50 MB per machine per day): stop auto reloads, show a "load manually" notice.
+  3. Local cache (IndexedDB): on start load from disk, then fetch only rows changed since last updated_at.
+  4. Load only active bookings (e.g. checkOut ≥ 3 months ago + future); older history on demand (search/open).
+  5. Realtime: stop broadcasting full rows to every client — use a light "changed" signal and fetch the delta;
+     let only one designated PC run the 30-min Excel sync (others skip).
+  6. Restore project after 3 Dec, test on 1–2 PCs for ~3 days watching the meter, then roll out to all.
+  Fallback before paying: move to another free backend (big job, avoid if possible).
 - Owner should run the latest `supabase-setup.sql` (reception edit rates/docs/todos + `repairs` view).
 - Future: LINE bot for repair notifications (read `public.repairs`, push via Supabase webhook/edge function).
 - The Extra bed workbook on Drive is shared "anyone with link can edit" — recommend viewer-only.
